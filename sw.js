@@ -1,8 +1,8 @@
 /* 巴士到站 PWA Service Worker —— 离线优先 */
-const SHELL = 'bus-shell-v8';
+const SHELL = 'bus-shell-v9';
 const DATA = 'bus-data-v1';
 const SHELL_FILES = [
-  './', './index.html', './style.css?v=134', './app.js?v=134', './manifest.webmanifest', './data/stopcodes.json',
+  './', './index.html', './style.css?v=135', './app.js?v=135', './manifest.webmanifest', './data/stopcodes.json',
   './icons/icon-192.png', './icons/icon-512.png', './icons/icon-180.png'
 ];
 const DATA_FILES = [
