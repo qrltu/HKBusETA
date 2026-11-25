@@ -156,6 +156,15 @@ main { flex: 1; padding: 4px 14px calc(env(safe-area-inset-bottom) + 86px); }
 .tt-row { display: flex; align-items: baseline; padding: 4px 0; font-size: 14px; gap: 8px; }
 .tt-time { font-weight: 800; color: var(--accent); font-variant-numeric: tabular-nums; }
 .tt-gap { color: var(--muted); font-size: 12px; }
+/* B12 官方班表 */
+.b12-next { font-size: 14px; margin: 2px 0 8px; padding: 8px 10px; border-radius: 10px; background: var(--accent-soft); color: var(--accent); }
+.b12-next b { font-size: 17px; font-variant-numeric: tabular-nums; }
+.b12-hour { padding: 3px 0; border-bottom: 1px solid var(--line); }
+.b12-hour .tt-time { min-width: 30px; }
+.b12-mins { font-variant-numeric: tabular-nums; letter-spacing: .06em; font-size: 13.5px; }
+.b12-fast { background: rgba(232,139,26,.12); border-radius: 6px; padding-left: 6px; padding-right: 6px; }
+.b12-fast .tt-time, .b12-fast .b12-mins { color: var(--orange); font-weight: 800; }
+.b12-note { font-size: 11px; color: var(--muted); padding-top: 6px; }
 
 /* 附近 */
 .nearby-bar { display: flex; align-items: stretch; gap: 8px; margin-bottom: 4px; }

@@ -2,7 +2,7 @@
 /* 27A / 806A / 806B 为内置静态时刻表（首末班时间 + 停靠站点），无实时查询 */
 'use strict';
 
-const VERSION = '1.5.6';
+const VERSION = '1.5.7';
 const BUILD = '2026-11-25';
 const DEFAULT_LOC = [22.4297, 114.203329];   // 雲滙：定位未更新时的默认坐标
 const NEARBY_R = 1000;                       // 附近站点半径（米）
@@ -266,6 +266,64 @@ const GMB_TIMETABLE = {
     ]
   },
 };
+
+/* ================= 内置 B12 官方静态时刻表（新大屿山巴士 NLB） =================
+   数据源：nlb.com.hk 官方站牌时刻表图片（用户提供，2026-10-12 生效）。
+   每日服务 Daily；两方向均为精确发车时刻（points），末班跨日至 00:30。
+   皇岗口岸开出 17 时、乌溪沙站开出 07 时加密为每 10 分钟一班，其余每 15 分钟一班。
+   bound 约定随九巴官网：1 = 去程（乌溪沙 → 皇岗），2 = 回程（皇岗 → 乌溪沙）。
+   routeId：117 = 乌溪沙站 > 皇岗口岸；118 = 皇岗口岸 > 乌溪沙站。 */
+const B12_DAILY_MIN = [0,15,30,45];              // 常规班次：每小时 00/15/30/45
+const B12_FAST_MIN  = [0,10,20,30,40,50];        // 加密班次：每小时 00/10/20/30/40/50
+function b12BuildPoints(fastHour){
+  // 00:15 / 00:30 为上一服务日末班车（跨日），放在当日 0 时之前；
+  // 23:45 之后由 nextDeparture 的「次日最早班」回退逻辑补上 00:00。
+  const pts = [0, 15, 30];
+  for (let h = 6; h <= 23; h++){
+    (h === fastHour ? B12_FAST_MIN : B12_DAILY_MIN).forEach(m => pts.push(h*60 + m));
+  }
+  return pts;
+}
+const B12_TIMETABLE = {
+  route:'B12', co:'NLB', fare:21, effective:'2026-10-12',
+  dirs:{
+    1:{ routeId:117, bound:1, stype:1, fastHour:7,
+        label:{sc:'乌溪沙站 → 皇岗口岸',tc:'烏溪沙站 → 皇崗口岸',en:'Wu Kai Sha → Huanggang Port'},
+        from:{sc:'乌溪沙站',tc:'烏溪沙站',en:'Wu Kai Sha Station'}, to:{sc:'皇岗口岸',tc:'皇崗口岸',en:'Huanggang Port'},
+        points:b12BuildPoints(7), note:{sc:'每日服务，约每 15 分钟一班；07 时加密至每 10 分钟；末班跨日 00:30',tc:'每日服務，約每 15 分鐘一班；07 時加密至每 10 分鐘；末班跨日 00:30',en:'Daily, approx. every 15 min; 07:00 hour every 10 min; last departure 00:30 (next day)'},
+        stops:[['乌溪沙站','烏溪沙站'],['马鞍山·利安邨','馬鞍山·利安邨'],['马鞍山·富安花园','馬鞍山·富安花園'],['马鞍山市中心','馬鞍山市中心'],['马鞍山·福安花园','馬鞍山·福安花園'],['马鞍山·耀安邨','馬鞍山·耀安邨'],['马鞍山·颂安邨','馬鞍山·頌安邨'],['马料水公众码头','馬料水公眾碼頭'],['水上活动中心','水上活動中心'],['香港生物科技研究院','香港生物科技研究院'],['科学园一期','科學園一期'],['科研路','科研路'],['创新路','創新路'],['白石角','白石角'],['大埔·广福邨','大埔·廣福邨'],['大埔·广福球场','大埔·廣福球場'],['大埔·林村河','大埔·林村河'],['新田运输交汇处','新田運輸交匯處'],['皇岗口岸','皇崗口岸']] },
+    2:{ routeId:118, bound:2, stype:1, fastHour:17,
+        label:{sc:'皇岗口岸 → 乌溪沙站',tc:'皇崗口岸 → 烏溪沙站',en:'Huanggang Port → Wu Kai Sha'},
+        from:{sc:'皇岗口岸',tc:'皇崗口岸',en:'Huanggang Port'}, to:{sc:'乌溪沙站',tc:'烏溪沙站',en:'Wu Kai Sha Station'},
+        points:b12BuildPoints(17), note:{sc:'每日服务，约每 15 分钟一班；17 时加密至每 10 分钟；末班跨日 00:30',tc:'每日服務，約每 15 分鐘一班；17 時加密至每 10 分鐘；末班跨日 00:30',en:'Daily, approx. every 15 min; 17:00 hour every 10 min; last departure 00:30 (next day)'},
+        stops:[['皇岗口岸','皇崗口岸'],['新田运输交汇处','新田運輸交匯處'],['大埔·广福邨','大埔·廣福邨'],['大埔·广福球场','大埔·廣福球場'],['大埔·林村河','大埔·林村河'],['白石角电站','白石角電站'],['天赋海湾','天賦海灣'],['灵实','靈實'],['创新路','創新路'],['科研路','科研路'],['科学园一期','科學園一期'],['香港生物科技研究院','香港生物科技研究院'],['水上活动中心','水上活動中心'],['马料水公众码头','馬料水公眾碼頭'],['马鞍山·颂安邨','馬鞍山·頌安邨'],['马鞍山·恒安邨','馬鞍山·恆安邨'],['马鞍山运动场','馬鞍山運動場'],['马鞍山·福安花园','馬鞍山·福安花園'],['马鞍山·海典居','馬鞍山·海典居'],['马鞍山·雅典花园','馬鞍山·雅典花園'],['马鞍山·利安邨','馬鞍山·利安邨'],['乌溪沙站','烏溪沙站']] }
+  }
+};
+function b12DirMeta(c){
+  if (!c) return null;
+  const rid = c.routeId;
+  if (rid === 117) return B12_TIMETABLE.dirs[1];
+  if (rid === 118) return B12_TIMETABLE.dirs[2];
+  const d = nm(c.dest || {});
+  if (/乌溪沙|烏溪沙|Wu Kai Sha/i.test(d)) return B12_TIMETABLE.dirs[2];  // 开往乌溪沙 = 皇岗开出
+  if (/皇岗|皇崗|Huanggang/i.test(d)) return B12_TIMETABLE.dirs[1];
+  return B12_TIMETABLE.dirs[1];
+}
+// 把内置 B12 目录转成与 kmbRouteMeta 相同结构的 meta，供 scheduleInfo/nextDeparture 共用
+function b12Meta(c){
+  const d = b12DirMeta(c); if (!d) return null;
+  const sched = {};
+  sched[String(d.stype).padStart(2,'0')] = d.points.map(t => {
+    const hh = String(Math.floor((t % 1440)/60)).padStart(2,'0');
+    const mm = String(t % 60).padStart(2,'0');
+    return {DayType:'D', ServiceType:String(d.stype).padStart(2,'0'), BoundText1:`${hh}:${mm}`, BoundTime1:'', Route:'B12'};
+  });
+  const list = d.stops.map((s,i) => ({seq:i, code:'', name:{sc:s[0], tc:s[1], en:''}, fare:0}));
+  return {route:'B12', bound:d.bound, stype:d.stype, list, sched, fare:B12_TIMETABLE.fare,
+    basic:{OriCName:nm(d.from), DestCName:nm(d.to)}, jt:{}, t:0,
+    firstDisp:'06:00', lastDisp:'00:30',
+    capturedAt:Date.parse(B12_TIMETABLE.effective+'T00:00:00+08:00'), preset:true, builtinB12:true, dirMeta:d};
+}
 /* ================= 状态 ================= */
 let QUICK = [], TRIPS = [], ROUTES = null, RSTOPS = null, STOPS = null, LINKS = null, STOP_ROUTES = null;
 let curGroup = localStorage.getItem('bp_cur') || null;
@@ -604,6 +662,8 @@ function presetMeta(c){
 }
 const isBuiltin = c => BUILTIN_ROUTES.some(b => b.route === c.route);
 async function kmbRouteMeta(c){
+  // B12（屿巴）：内建官方静态时刻表，直接带入，不依赖在线查询
+  if (c.co === 'NLB' && c.route === 'B12') return b12Meta(c);
   if (c.co !== 'KMB' && c.co !== 'LWB') return null;
   const route = c.route, bound = (c.dir === 'I' || String(c.dir) === '2') ? 2 : 1, stype = c.stype || '1';
   // 内置线路：像 27A 一样直接带入随包静态班表，打开即用、不依赖在线查询。
@@ -687,8 +747,8 @@ function scheduleInfo(meta, date){
   return {
     windows: rows,
     points,
-    first: minToHm(Math.min(...allTimes)),
-    last: minToHm(Math.max(...points.length ? [...points, ...rows.map(r=>r.end)] : rows.map(r=>r.end)))
+    first: meta.firstDisp || minToHm(Math.min(...allTimes)),
+    last: meta.lastDisp || minToHm(Math.max(...points.length ? [...points, ...rows.map(r=>r.end)] : rows.map(r=>r.end)))
   };
 }
 function nextDeparture(sched, date){
@@ -734,6 +794,17 @@ async function kmbEstimate(c, stopId){
   if (!sched) return null;
   const dep = nextDeparture(sched, new Date());
   if (!dep) return null;
+  // B12（屿巴内建）：无逐站行车时间接口，按站序比例 × 全程行车时间估算到站
+  if (meta.builtinB12){
+    let jt = null;
+    const d = meta.dirMeta;
+    const totalJt = (LINKS && LINKS.NLB && LINKS.NLB.B12 && +LINKS.NLB.B12.jt) || 68;
+    const boardIdx = findB12StopIndex(d, stopId);
+    if (boardIdx > 0 && d.stops.length > 1) jt = Math.round(totalJt * boardIdx / (d.stops.length - 1)) * 60;
+    return {dep:dep.time, head:dep.head, arrive:jt != null ? new Date(dep.time.getTime() + jt*1000) : null,
+      fare:meta.fare, first:sched.first, last:sched.last, code:'', stopName:boardIdx > 0 ? nm({sc:d.stops[boardIdx][0], tc:d.stops[boardIdx][1]}) : '',
+      capturedAt:meta.capturedAt || 0, preset:true, nextDay:!!dep.nextDay, builtinB12:true, noStale:true};
+  }
   const code = isRealCode('KMB', stopId) ? stopCode('KMB', stopId) : '';
   const target = code ? meta.list.find(x => x.code === code) : null;
   const jt = target ? await kmbJourney(meta, 0, target.seq) : null;
@@ -741,14 +812,28 @@ async function kmbEstimate(c, stopId){
     fare:meta.fare, first:sched.first, last:sched.last, code:code || (target ? target.code : ''), stopName:target ? nm(target.name) : '',
     capturedAt:meta.capturedAt || 0, preset:!!meta.preset, nextDay:!!dep.nextDay};
 }
+// B12 站牌 ID → 在官方路线中的站序（用于按全程行车时间比例估算到站）
+function findB12StopIndex(d, stopId){
+  if (!d) return -1;
+  const cached = ttCached({co:'NLB', routeId:d.routeId});
+  if (cached && cached.stops && cached.stops.length){
+    const i = cached.stops.findIndex(s => String(s.id) === String(stopId));
+    if (i >= 0) return i;
+  }
+  // 兜底：直接匹配内置站名
+  if (typeof stopId === 'string' && /[一-龥]/.test(stopId) && d.stops){
+    return d.stops.findIndex(s => s[0] === stopId || s[1] === stopId);
+  }
+  return -1;
+}
 async function enrichBoardEstimates(rows){
   const jobs = rows.filter(r => !r.etas || !r.etas.length || r.etas[0].min == null)
-    .filter(r => r.co === 'KMB' || r.co === 'LWB').slice(0, 16);
+    .filter(r => r.co === 'KMB' || r.co === 'LWB' || (r.co === 'NLB' && r.route === 'B12')).slice(0, 16);
   if (!jobs.length) return false;
   let changed = false;
   await runPool(jobs, 3, async r => {
     try {
-      const e = await kmbEstimate({co:r.co, route:r.route, dir:r.dir, stype:r.stype || '1'}, r.stop);
+      const e = await kmbEstimate({co:r.co, route:r.route, dir:r.dir, stype:r.stype || '1', routeId:r.routeId, dest:r.dest}, r.stop);
       if (e){ r.tt = e; changed = true; }
     } catch(e){}
   });
@@ -965,7 +1050,7 @@ function ttFreshTag(tt){
   const d = new Date(tt.capturedAt);
   if (isNaN(d)) return '';
   const md = `${d.getMonth()+1}/${d.getDate()}`;
-  const stale = Date.now() - tt.capturedAt > 30*86400e3;
+  const stale = !tt.noStale && Date.now() - tt.capturedAt > 30*86400e3;
   return `<span class="tt-fresh${stale ? ' stale' : ''}">(${esc(T('schedOn'))} ${md}${stale ? ' · '+esc(T('schedStale')) : ''})</span>`;
 }
 function rowHtml(r){
@@ -1067,7 +1152,7 @@ async function renderBoard(){
     // 状态行统一为一句固定文案，不随数据来源拼接，避免冗长
     $('#board-status').textContent = offlineStatusLine(cache.t);
     // 仅对没有实时数据的行做班表推算
-    const noLive = merged.filter(r => !r._liveKept && (r.co === 'KMB' || r.co === 'LWB'));
+    const noLive = merged.filter(r => !r._liveKept && (r.co === 'KMB' || r.co === 'LWB' || (r.co === 'NLB' && r.route === 'B12')));
     if (noLive.length){
       const offlineChanged = await enrichBoardEstimates(noLive);
       // 注意：离线不回写 saveBoardStatic，否则会覆盖在线实时快照并刷新时间戳，使数据"永不过期"
@@ -1448,12 +1533,13 @@ async function enrichSearchResult(r, node){
     if (g && g.dirs && g.dirs.length) line.textContent = `${coName('GMB')} · ${T('firstTime')} ${pickB(g.dirs[0].first)} · ${T('lastTime')} ${pickB(g.dirs[0].last)} · ${T('fare')} $${g.fare}`;
     return;
   }
-  if (r.co !== 'KMB' && r.co !== 'LWB') return;
+  const isB12 = r.co === 'NLB' && r.route === 'B12';
+  if (r.co !== 'KMB' && r.co !== 'LWB' && !isB12) return;
   const meta = await kmbRouteMeta(r);
   if (!meta) return;
   const info = scheduleInfo(meta, new Date());
   if (info) line.textContent = `${coName(r.co)} · ${T('firstTime')} ${info.first} · ${T('lastTime')} ${info.last} · ${T('fare')} $${meta.fare.toFixed(1)}`;
-  if (!node.isConnected) return;
+  if (!node.isConnected || isB12) return;
   const g = findGroup(curGroup);
   const ids = (g && g.stops && g.stops.KMB) || [];
   let est = null;
@@ -1550,6 +1636,39 @@ function buildTimetable(arr, stop, link){
   tt.innerHTML = inner;
   return tt;
 }
+/* B12 官方静态班表展示：按小时逐行排出发车分钟，17/07 加密时段高亮，标注「每日」与生效日期 */
+function b12TimetableBox(meta, date){
+  if (!meta || !meta.builtinB12 || !meta.dirMeta) return null;
+  const d = meta.dirMeta;
+  const tt = el('div','tt-box b12-tt');
+  const byHour = {};
+  d.points.forEach(t => {
+    if (t >= 1440) return;
+    const h = Math.floor(t/60), m = t % 60;
+    (byHour[h] = byHour[h] || []).push(String(m).padStart(2,'0'));
+  });
+  const daily = lang === 'en' ? 'Daily' : lang === 'tc' ? '每日' : '每日';
+  let rows = `<div class="tt-title">${T('official')} · ${esc(pickB(d.label))} · ${daily}</div>`;
+  // 00 时为跨日末班（23:45 之后），按图片语义排在末尾并标注「次日」
+  const hours = Object.keys(byHour).map(Number).sort((a,b)=>a-b);
+  const crossDay = hours.filter(h => h === 0), normal = hours.filter(h => h !== 0);
+  [...normal, ...crossDay].forEach(h => {
+    const mins = byHour[h];
+    const fast = h === d.fastHour ? ' b12-fast' : '';
+    const day = h === 0 ? `<span class="tt-day">${esc(T('nextDay'))} </span>` : '';
+    rows += `<div class="tt-row b12-hour${fast}"><span class="tt-time">${String(h).padStart(2,'0')}</span><span class="b12-mins">${day}${mins.join('  ')}</span></div>`;
+  });
+  rows += `<div class="tt-row b12-note">${esc(pickB(d.note))}</div>`;
+  rows += `<div class="tt-row b12-note">${lang==='en'?'Effective':'生效日期'} ${esc(B12_TIMETABLE.effective)} · ${esc(T('schedOn'))} RTKG / NLB</div>`;
+  const sched = scheduleInfo(meta, date);
+  const dep = sched ? nextDeparture(sched, date) : null;
+  if (dep){
+    const day = dep.nextDay ? `<span class="tt-day">${esc(T('nextDay'))} </span>` : '';
+    rows = `<div class="b12-next">${T('nextDep')} ${day}<b>${esc(hm(dep.time))}</b> ${esc(T('depAt'))}${dep.head ? ` · ${T('interval')} ${dep.head}${T('min')}` : ''}</div>` + rows;
+  }
+  tt.innerHTML = rows;
+  return tt;
+}
 async function renderRouteBoard(){
   const c0 = routeCtx; if (!c0) return;
   const seq = ++routeSeq;
@@ -1561,7 +1680,7 @@ async function renderRouteBoard(){
   if (c.static || c.co === 'GMB'){ renderGmbTimetable(c); return; }
 
   let kmeta = null, kinfo = null;
-  if (c.co === 'KMB' || c.co === 'LWB'){
+  if (c.co === 'KMB' || c.co === 'LWB' || (c.co === 'NLB' && c.route === 'B12')){
     try { kmeta = await kmbRouteMeta(c); if (kmeta) kinfo = scheduleInfo(kmeta, new Date()); } catch(e){}
   }
   if (seq !== routeSeq) return;
@@ -1625,6 +1744,12 @@ async function renderRouteBoard(){
   });
   box.appendChild(wrap);
 
+  // B12（屿巴内建）：展示官方静态班表（即使离线也可见），并给出下一班推算
+  if (c.co === 'NLB' && c.route === 'B12' && kmeta){
+    const b12box = b12TimetableBox(kmeta, new Date());
+    if (b12box) box.insertBefore(b12box, wrap);
+  }
+
   if (!navigator.onLine){
     box.insertAdjacentHTML('beforeend', `<div class="status-line">${T('offline')}</div>`);
     return;
@@ -1642,13 +1767,13 @@ async function renderRouteBoard(){
     let arr = [];
     try { arr = (await etaFn(stops[boardIdx])) || []; } catch(e){ arr = []; }
     if (seq !== routeSeq) return;
-    if (!arr.length && (c.co === 'KMB' || c.co === 'LWB')){
+    if (!arr.length && (c.co === 'KMB' || c.co === 'LWB' || (c.co === 'NLB' && c.route === 'B12'))){
       try {
         const e = await kmbEstimate(c, boardStop.id);
         if (e){
           if (cells[boardIdx]){ cells[boardIdx].className = 'stop-eta tt-eta'; cells[boardIdx].textContent = hm(e.arrive || e.dep); }
           const tt = el('div','tt-box');
-          tt.innerHTML = `<div class="tt-title">${T('kbEstimate')} · ${esc(nameWithCode('KMB', boardStop.id, nm(boardStop.name)))}</div>
+          tt.innerHTML = `<div class="tt-title">${T('kbEstimate')} · ${esc(nameWithCode(c.co === 'NLB' ? 'NLB' : 'KMB', boardStop.id, nm(boardStop.name)))}</div>
             <div class="tt-row"><span>${esc(T('nextDep'))}</span><span>${esc(hm(e.dep))} ${esc(T('depAt'))}</span></div>
             ${e.arrive ? `<div class="tt-row"><span>${esc(T('estArrive'))}</span><span>${esc(hm(e.arrive))}</span></div>` : ''}
             ${kinfo ? `<div class="tt-row"><span>${esc(T('firstTime'))}/${esc(T('lastTime'))}</span><span>${esc(kinfo.first)} – ${esc(kinfo.last)}</span></div>` : ''}`;
