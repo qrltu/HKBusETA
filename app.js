@@ -2,7 +2,7 @@
 /* 27A / 806A / 806B 为内置静态时刻表（首末班时间 + 停靠站点），无实时查询 */
 'use strict';
 
-const VERSION = '1.5.0';
+const VERSION = '1.5.1';
 const BUILD = '2026-11-25';
 const DEFAULT_LOC = [22.4297, 114.203329];   // 雲滙：定位未更新时的默认坐标
 const NEARBY_R = 1000;                       // 附近站点半径（米）
@@ -44,6 +44,7 @@ const I18N = {
     nearLocBad:'未找到该位置，可试 雲滙 或 22.4297,114.2033',
     refreshing:'正在刷新…', hkOnly:'仅提供香港境内巴士查询', locModeLabel:'实时定位如下', nearSuffix:'附近',
     offlineEst:'离线推算 · 仅供参考', schedOn:'班表', schedStale:'班表可能已过期', freshNote:'基于', nextDay:'次日',
+    hkFallbackAirport:'当前定位将调整为机场站',
   },
   tc: {
     tabStops:'到站', tabTrips:'行程', tabRoute:'線路', tabNearby:'附近', tabMe:'我的',
@@ -79,6 +80,7 @@ const I18N = {
     nearLocBad:'找不到該位置，可試 雲滙 或 22.4297,114.2033',
     refreshing:'正在刷新…', hkOnly:'僅提供香港境內巴士查詢', locModeLabel:'實時定位如下', nearSuffix:'附近',
     offlineEst:'離線推算 · 僅供參考', schedOn:'班表', schedStale:'班表可能已過期', freshNote:'基於', nextDay:'次日',
+    hkFallbackAirport:'當前定位將調整為機場站',
   },
   en: {
     tabStops:'Arrivals', tabTrips:'Trips', tabRoute:'Routes', tabNearby:'Nearby', tabMe:'Me',
@@ -114,6 +116,7 @@ const I18N = {
     nearLocBad:'Location not found. Try St Martin or 22.4297,114.2033',
     refreshing:'Refreshing…', hkOnly:'Bus service is available in Hong Kong only', locModeLabel:'Live location below', nearSuffix:'nearby',
     offlineEst:'Offline estimate · for reference only', schedOn:'sched', schedStale:'schedule may be out of date', freshNote:'based on', nextDay:'next day',
+    hkFallbackAirport:'Location adjusted to Airport stop',
   }
 };
 let lang = localStorage.getItem('bp_lang');
@@ -343,8 +346,9 @@ function renderLocDisplay(){
   }
   if (pin) pin.textContent = (locating && !hkOutOfRange) ? '◎' : '▦';
   if (place){
-    if (locating && !hkOutOfRange && placeTxt){ placeTxt.textContent = locPlaceName + ' ' + T('nearSuffix'); place.classList.add('show'); }
-    else place.classList.remove('show');
+    if (hkOutOfRange && placeTxt){ placeTxt.textContent = T('hkFallbackAirport'); place.classList.add('show'); place.classList.add('hk-warn'); }
+    else if (locating && placeTxt){ placeTxt.textContent = locPlaceName + ' ' + T('nearSuffix'); place.classList.add('show'); place.classList.remove('hk-warn'); }
+    else { place.classList.remove('show'); place.classList.remove('hk-warn'); }
   }
   if (line){
     if (hkOutOfRange){ line.textContent = T('hkOnly'); line.classList.add('hk-warn'); }
@@ -1616,14 +1620,14 @@ function locateAndRender(){
   navigator.geolocation.getCurrentPosition(async pos => {
     const la = pos.coords.latitude, lo = pos.coords.longitude;
     if (!inHongKong(la, lo)){
-      // 境外：提示 + 不采用境外坐标；下拉默认切到机场（仅在用户未手动选过时）
+      // 境外：不采用境外坐标，一律兜底切到机场站（与地址行「将调整为机场」提示保持一致）
       hkOutOfRange = true; locPlaceName = null;
       window._myLoc = DEFAULT_LOC.slice(); saveJSON('bp_nearloc', window._myLoc);
       toast(T('hkOnly'));
-      if (!userPickedGroup){
-        const ap = groupList().find(g => g.id === 'airport');
-        if (ap){ curGroup = ap.id; localStorage.setItem('bp_cur', curGroup); }
-      }
+      const ap = groupList().find(g => g.id === 'airport');
+      if (ap){ curGroup = ap.id; localStorage.setItem('bp_cur', curGroup); }
+      // 由定位逻辑接管站点组：下次境内定位可切回雲滙
+      userPickedGroup = false; localStorage.setItem('bp_user_picked', '0');
       st.textContent = T('hkOnly');
       if (activeView() === 'nearby') renderNearby(true);
       else { renderChips(); renderBoard(); }

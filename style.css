@@ -54,6 +54,8 @@ button { font-family: inherit; }
   font-size: 14.5px; font-weight: 700; color: var(--ink); }
 #loc-place.show { display: flex; }
 #loc-place .lp-ico { color: var(--accent); font-size: 15px; }
+#loc-place.hk-warn { color: var(--accent); opacity: 1; }
+#loc-place.hk-warn .lp-ico { color: var(--accent); }
 .quickbar { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
 .quick-trigger { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; text-align: left;
   border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 12px;
@@ -63,7 +65,9 @@ button { font-family: inherit; }
 .quick-trigger .quick-caret { color: var(--muted); font-size: 12px; }
 .quick-locate { flex: 0 0 auto; width: 42px; height: 42px; border: 1px solid var(--accent); background: var(--accent-soft);
   color: var(--accent); border-radius: 12px; font-size: 19px; cursor: pointer; line-height: 1; }
-.quick-menu { position: absolute; left: 14px; right: 14px; top: calc(var(--tb-h) + 52px); z-index: 25;
+/* 菜单是 #chips-row(sticky，本身即定位包含块) 的子元素，top 只需相对该行向下越过 quickbar，
+   不可再叠加 --tb-h，否则会多偏移一个顶栏高度、浮动到到站列表中 */
+.quick-menu { position: absolute; left: 14px; right: 14px; top: 50px; z-index: 25;
   background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 6px;
   box-shadow: 0 8px 26px rgba(0,0,0,.16); max-height: 64vh; overflow-y: auto; }
 .quick-menu[hidden] { display: none; }
