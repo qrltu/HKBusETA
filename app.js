@@ -2,7 +2,7 @@
 /* 27A / 806A / 806B 为内置静态时刻表（首末班时间 + 停靠站点），无实时查询 */
 'use strict';
 
-const VERSION = '1.5.1';
+const VERSION = '1.5.2';
 const BUILD = '2026-11-25';
 const DEFAULT_LOC = [22.4297, 114.203329];   // 雲滙：定位未更新时的默认坐标
 const NEARBY_R = 1000;                       // 附近站点半径（米）
@@ -45,6 +45,7 @@ const I18N = {
     refreshing:'正在刷新…', hkOnly:'仅提供香港境内巴士查询', locModeLabel:'实时定位如下', nearSuffix:'附近',
     offlineEst:'离线推算 · 仅供参考', schedOn:'班表', schedStale:'班表可能已过期', freshNote:'基于', nextDay:'次日',
     hkFallbackAirport:'当前定位将调整为机场站',
+    liveKept:'实时数据 · 离线延续', liveAgo:'原更新于', liveStale:'实时数据已过期，改用班表推算',
   },
   tc: {
     tabStops:'到站', tabTrips:'行程', tabRoute:'線路', tabNearby:'附近', tabMe:'我的',
@@ -81,6 +82,7 @@ const I18N = {
     refreshing:'正在刷新…', hkOnly:'僅提供香港境內巴士查詢', locModeLabel:'實時定位如下', nearSuffix:'附近',
     offlineEst:'離線推算 · 僅供參考', schedOn:'班表', schedStale:'班表可能已過期', freshNote:'基於', nextDay:'次日',
     hkFallbackAirport:'當前定位將調整為機場站',
+    liveKept:'實時數據 · 離線延續', liveAgo:'原更新於', liveStale:'實時數據已過期，改用班表推算',
   },
   en: {
     tabStops:'Arrivals', tabTrips:'Trips', tabRoute:'Routes', tabNearby:'Nearby', tabMe:'Me',
@@ -117,6 +119,7 @@ const I18N = {
     refreshing:'Refreshing…', hkOnly:'Bus service is available in Hong Kong only', locModeLabel:'Live location below', nearSuffix:'nearby',
     offlineEst:'Offline estimate · for reference only', schedOn:'sched', schedStale:'schedule may be out of date', freshNote:'based on', nextDay:'next day',
     hkFallbackAirport:'Location adjusted to Airport stop',
+    liveKept:'Live data · kept offline', liveAgo:'was updated', liveStale:'Live data expired, using timetable',
   }
 };
 let lang = localStorage.getItem('bp_lang');
@@ -945,10 +948,33 @@ function boardCache(gid){
   return c.rows ? c : null;
 }
 function saveBoardStatic(gid, rows){
-  BOARD[gid] = {t: Date.now(), rows: rows.slice(0, 90).map(r => ({co:r.co, route:r.route, dir:r.dir, stype:r.stype, stop:r.stop, dest:r.dest, tt:r.tt || null}))};
+  // 连同实时 etas（含绝对到站时刻 iso）一起缓存，供离线时衰减延续
+  BOARD[gid] = {t: Date.now(), rows: rows.slice(0, 90).map(r => ({
+    co:r.co, route:r.route, dir:r.dir, stype:r.stype, stop:r.stop, dest:r.dest, tt:r.tt || null,
+    etas:(r.etas || []).filter(e => e.iso).slice(0,4).map(e => ({min:e.min, iso:e.iso, rmk:e.rmk || ''}))
+  }))};
   const ks = Object.keys(BOARD);
   if (ks.length > 12) ks.slice(0, ks.length - 12).forEach(k => delete BOARD[k]);
   saveJSON('bp_board', BOARD);
+}
+/* 离线时把在线缓存的实时 etas 按绝对到站时刻重算衰减：
+   iso 在未来 → 保留（分钟数随真实时间递减）；刚过站（>= -2 分钟）→ 视为即将到站；更早 → 剔除 */
+function reviveLiveEtas(rows, cachedAt){
+  let kept = 0;
+  const now = Date.now();
+  const out = rows.map(r => {
+    if (!r.etas || !r.etas.length) return {...r, etas:[], _liveKept:false};
+    const revived = r.etas.map(e => {
+      const ms = new Date(e.iso) - now;
+      if (isNaN(ms)) return null;
+      const min = Math.floor(ms/60000);
+      if (min < -2) return null;              // 已过站超过 2 分钟，剔除
+      return {...e, min};
+    }).filter(Boolean).sort((a,b) => a.min - b.min);
+    if (revived.length){ kept++; return {...r, etas:revived, _liveKept:true}; }
+    return {...r, etas:[], _liveKept:false};
+  });
+  return {rows:out, kept};
 }
 async function renderBoard(){
   let g = findGroup(curGroup);
@@ -970,17 +996,24 @@ async function renderBoard(){
   } else if (changed){
     $('#board-status').textContent = T('loading');
   }
-  // 离线：用本地缓存的线路清单，并按班表推算下一班（在线缓存 → 官网缓存 → 随包预置）
+  // 离线：先按绝对到站时刻衰减延续在线时的实时数据，剩余无实时数据的行再按班表推算
   if (!navigator.onLine){
-    const liveRows = cache ? cache.rows.map(r => ({...r, etas:[]})) : [];
-    paintBoard(liveRows);
-    $('#board-status').textContent = `${T('offline')}${cache && cache.t ? ' · ' + T('offlineData') + ' ' + dtStr(cache.t) : ''}`;
-    if (liveRows.length){
-      const offlineChanged = await enrichBoardEstimates(liveRows);
+    if (!cache){ $('#board').innerHTML = ''; $('#board-status').textContent = T('offline'); return; }
+    const revived = reviveLiveEtas(cache.rows, cache.t);
+    const merged = revived.rows.slice();
+    paintBoard(merged);
+    const ago = cache.t ? ' · ' + T('liveAgo') + ' ' + dtStr(cache.t) : '';
+    $('#board-status').textContent = revived.kept
+      ? `${T('offline')} · ${T('liveKept')}${ago}`
+      : `${T('offline')}${cache.t ? ' · ' + T('offlineData') + ' ' + dtStr(cache.t) : ''}`;
+    // 仅对没有实时数据的行做班表推算
+    const noLive = merged.filter(r => !r._liveKept && (r.co === 'KMB' || r.co === 'LWB'));
+    if (noLive.length){
+      const offlineChanged = await enrichBoardEstimates(noLive);
+      // 注意：离线不回写 saveBoardStatic，否则会覆盖在线实时快照并刷新时间戳，使数据"永不过期"
       if (offlineChanged && seq === boardSeq){
-        paintBoard(liveRows);
-        saveBoardStatic(g.id, liveRows);
-        $('#board-status').textContent = `${T('offline')} · ${T('offlineEst')}`;
+        paintBoard(merged);
+        $('#board-status').textContent = `${T('offline')} · ${T('liveKept')}${ago} · ${T('offlineEst')}`;
       }
     }
     return;
