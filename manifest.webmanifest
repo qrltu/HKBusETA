@@ -1,0 +1,33 @@
+{
+  "name": "巴士到站 Bus ETA",
+  "short_name": "巴士到站",
+  "description": "香港巴士实时到站与常用线路时刻表 PWA，数据来自 DATA.GOV.HK 开放数据，支持离线使用",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#4B2FC8",
+  "theme_color": "#4B2FC8",
+  "lang": "zh-Hans",
+  "version": "1.4.2",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

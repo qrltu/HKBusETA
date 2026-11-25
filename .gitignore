@@ -1,0 +1,24 @@
+# 系统 / 编辑器
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.idea/
+.vscode/
+
+# 日志
+*.log
+npm-debug.log*
+
+# 本地运行时数据（用户设置存于浏览器 localStorage，不应入库）
+*.local
+
+# 备份与临时文件（源码仓库只保留当前版本）
+backups/
+*.zip
+*.tar.gz
+
+# 测试工具产物
+.playwright-cli/
+playwright-report/
+test-results/

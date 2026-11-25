@@ -1,0 +1,175 @@
+{
+ "trips": [
+  {
+   "id": "trip-nlb",
+   "from_sc": "云汇",
+   "from_tc": "雲滙",
+   "to_sc": "皇岗口岸",
+   "to_tc": "皇崗口岸",
+   "entries": [
+    {
+     "co": "NLB",
+     "routeNo": "B12",
+     "stopId": "364",
+     "stopName": "雲滙",
+     "destKey": "皇岗"
+    }
+   ],
+   "from_en": "St Martin",
+   "to_en": "Huanggang Port"
+  },
+  {
+   "id": "trip-mk",
+   "from_sc": "云汇",
+   "from_tc": "雲滙",
+   "to_sc": "旺角",
+   "to_tc": "旺角",
+   "entries": [
+    {
+     "co": "KMB",
+     "route": "272X",
+     "stype": "1",
+     "dir": "O",
+     "stopId": "33ABA49F0E91A247",
+     "routeNo": "272X",
+     "stopName": "雲滙"
+    }
+   ],
+   "from_en": "St Martin",
+   "to_en": "Mong Kok"
+  },
+  {
+   "id": "trip-uni",
+   "from_sc": "云汇",
+   "from_tc": "雲滙",
+   "to_sc": "港铁大学站",
+   "to_tc": "港鐵大學站",
+   "entries": [
+    {
+     "co": "KMB",
+     "route": "272A",
+     "stype": "1",
+     "dir": "O",
+     "stopId": "3F24CFF9046300D9",
+     "routeNo": "272A",
+     "stopName": "雲滙"
+    }
+   ],
+   "from_en": "St Martin",
+   "to_en": "University Station"
+  },
+  {
+   "id": "trip-air",
+   "from_sc": "机场(地面运输中心)",
+   "from_tc": "機場(地面運輸中心)",
+   "to_sc": "云汇",
+   "to_tc": "雲滙",
+   "entries": [
+    {
+     "co": "KMB",
+     "route": "A47X",
+     "stype": "1",
+     "dir": "I",
+     "stopId": "6B689FA123E9E1A6",
+     "routeNo": "A47X",
+     "stopName": "机场(地面运输中心)"
+    },
+    {
+     "co": "KMB",
+     "route": "A41",
+     "stype": "1",
+     "dir": "I",
+     "stopId": "5E1FA939586B3FD1",
+     "routeNo": "A41",
+     "stopName": "机场(地面运输中心)"
+    },
+    {
+     "co": "KMB",
+     "route": "A42",
+     "stype": "1",
+     "dir": "I",
+     "stopId": "23F3D6C7BDAD87EB",
+     "routeNo": "A42",
+     "stopName": "机场(地面运输中心)"
+    },
+    {
+     "co": "KMB",
+     "route": "A46",
+     "stype": "1",
+     "dir": "I",
+     "stopId": "23F3D6C7BDAD87EB",
+     "routeNo": "A46",
+     "stopName": "机场(地面运输中心)"
+    }
+   ],
+   "extras": [
+    {
+     "co": "KMB",
+     "route": "272X",
+     "stype": "1",
+     "dir": "I",
+     "stopId": "2F202818B5A6F424",
+     "label": {
+      "sc": "转乘提示：青沙公路转车站 272X 往雲滙方向",
+      "tc": "轉乘提示：青沙公路轉車站 272X 往雲滙方向",
+      "en": "Transfer: 272X to St Martin at Tsing Sha Hwy BBI"
+     }
+    }
+   ],
+   "from_en": "Airport (GTC)",
+   "to_en": "St Martin"
+  },
+  {
+   "id": "trip-qsa-air",
+   "from_sc": "青沙公路转车站",
+   "from_tc": "青沙公路轉車站",
+   "to_sc": "机场(地面运输中心)",
+   "to_tc": "機場(地面運輸中心)",
+   "entries": [
+    {
+     "co": "KMB",
+     "route": "A41",
+     "stype": "1",
+     "dir": "O",
+     "stopId": "673B33867260EBB7",
+     "routeNo": "A41",
+     "stopName": "青沙公路转车站"
+    },
+    {
+     "co": "KMB",
+     "route": "A41P",
+     "stype": "1",
+     "dir": "O",
+     "stopId": "673B33867260EBB7",
+     "routeNo": "A41P",
+     "stopName": "青沙公路转车站"
+    },
+    {
+     "co": "KMB",
+     "route": "A42",
+     "stype": "1",
+     "dir": "O",
+     "stopId": "673B33867260EBB7",
+     "routeNo": "A42",
+     "stopName": "青沙公路转车站"
+    },
+    {
+     "co": "KMB",
+     "route": "A46",
+     "stype": "1",
+     "dir": "O",
+     "stopId": "673B33867260EBB7",
+     "routeNo": "A46",
+     "stopName": "青沙公路转车站"
+    }
+   ],
+   "hint": {
+    "sc": "以上为青沙公路转车站（往机场方向）的到站时间",
+    "tc": "以上為青沙公路轉車站（往機場方向）的到站時間",
+    "en": "Arrivals at Tsing Sha Hwy BBI, airport-bound"
+   },
+   "from_en": "Tsing Sha Hwy BBI",
+   "to_en": "Airport (GTC)"
+  }
+ ]
+}
