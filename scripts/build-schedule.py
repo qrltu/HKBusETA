@@ -26,7 +26,8 @@ LOG = os.path.join(os.path.abspath(__file__) + '.log')
 
 API = 'https://search.kmb.hk/KMBWebSite/Function/FunctionRequest.ashx?'
 HEAD = {'Content-Type': 'application/json; charset=utf-8'}
-ROUTES = ['272X', '272A', 'A47X', 'A41', 'A42', 'A46', 'A41P']
+# 与「线路」页签 9 条内置线路保持一致（B12 为屿巴、官网无班表接口，另行处理）
+ROUTES = ['272X', '272A', '900', 'A47X', 'A41', 'A42', 'A46', 'E42', 'A41P']
 BOUNDS = [1, 2]
 STYPE = '1'
 RETRY = 3
@@ -63,10 +64,10 @@ def main():
                 log('  跳过（无站点数据）')
                 continue
             rs = [x for x in stops['routeStops']
-                  if str(x.get('Direction', '')).strip().upper().startswith('F')
+                  if str(x.get('Direction', '')).strip().upper()[:1] in ('F', 'B')
                   and str(x.get('Seq', '')).strip().isdigit()]
             if not rs:
-                log('  跳过（无去程站点）')
+                log('  跳过（无站点数据）')
                 continue
             rs.sort(key=lambda x: int(x['Seq']))
             mlist = []

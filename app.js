@@ -2,7 +2,7 @@
 /* 27A / 806A / 806B 为内置静态时刻表（首末班时间 + 停靠站点），无实时查询 */
 'use strict';
 
-const VERSION = '1.5.5';
+const VERSION = '1.5.6';
 const BUILD = '2026-11-25';
 const DEFAULT_LOC = [22.4297, 114.203329];   // 雲滙：定位未更新时的默认坐标
 const NEARBY_R = 1000;                       // 附近站点半径（米）
@@ -277,19 +277,29 @@ const BUILTIN_ROUTES = [
   {co:'KMB', route:'272A', stype:'1', dir:'O', label:{sc:'大学站 → 白石角', tc:'大學站 → 白石角', en:'University → Pak Shek Kok'}},
   {co:'NLB', route:'B12', routeId:117, label:{sc:'乌溪沙站 → 皇岗口岸', tc:'烏溪沙站 → 皇崗口岸', en:'Wu Kai Sha → Huanggang Port'}},
   {co:'KMB', route:'900', stype:'1', dir:'O', label:{sc:'白石角 → 湾仔会展', tc:'白石角 → 灣仔會展', en:'Pak Shek Kok → Wan Chai'}},
-  {co:'LWB', route:'A47X', stype:'1', dir:'I', label:{sc:'机场 → 大埔太和', tc:'機場 → 大埔太和', en:'Airport → Tai Po (Tai Wo)'}},
-  {co:'LWB', route:'A41', stype:'1', dir:'I', label:{sc:'机场 → 硕门邨', tc:'機場 → 碩門邨', en:'Airport → Shek Mun Estate'}},
-  {co:'LWB', route:'A42', stype:'1', dir:'I', label:{sc:'机场 → 黄泥头', tc:'機場 → 黃泥頭', en:'Airport → Wong Nai Tau'}},
-  {co:'LWB', route:'A46', stype:'1', dir:'I', label:{sc:'机场 → 火炭骏景园', tc:'機場 → 火炭駿景園', en:'Airport → Fo Tan (Royal Ascot)'}},
-  {co:'LWB', route:'E42', stype:'1', dir:'I', label:{sc:'机场 → 博康', tc:'機場 → 博康', en:'Airport → Pok Hong'}},
+  {co:'KMB', route:'A47X', stype:'1', dir:'I', label:{sc:'机场 → 大埔太和', tc:'機場 → 大埔太和', en:'Airport → Tai Po (Tai Wo)'}},
+  {co:'KMB', route:'A41', stype:'1', dir:'I', label:{sc:'机场 → 硕门邨', tc:'機場 → 碩門邨', en:'Airport → Shek Mun Estate'}},
+  {co:'KMB', route:'A42', stype:'1', dir:'I', label:{sc:'机场 → 黄泥头', tc:'機場 → 黃泥頭', en:'Airport → Wong Nai Tau'}},
+  {co:'KMB', route:'A46', stype:'1', dir:'I', label:{sc:'机场 → 火炭骏景园', tc:'機場 → 火炭駿景園', en:'Airport → Fo Tan (Royal Ascot)'}},
+  {co:'KMB', route:'E42', stype:'1', dir:'I', label:{sc:'机场 → 博康', tc:'機場 → 博康', en:'Airport → Pok Hong'}},
 ];
 (function injectBuiltinRoutes(){
   const KEY = 'bp_builtin_routes_v1';
-  if (localStorage.getItem(KEY)) return;
-  const have = new Set(favRoutes.map(f => f.co + ':' + f.route));
-  BUILTIN_ROUTES.forEach(b => { if (!have.has(b.co + ':' + b.route)) favRoutes.push({...b, builtin:true}); });
-  localStorage.setItem(KEY, '1');
-  saveJSON('bp_routes', favRoutes);
+  if (!localStorage.getItem(KEY)){
+    const have = new Set(favRoutes.map(f => f.co + ':' + f.route));
+    BUILTIN_ROUTES.forEach(b => { if (!have.has(b.co + ':' + b.route)) favRoutes.push({...b, builtin:true}); });
+    localStorage.setItem(KEY, '1');
+    saveJSON('bp_routes', favRoutes);
+  }
+  // v2 迁移：机场线此前误标为 LWB（紫色），统一改为 KMB（红色），与到站/行程页一致
+  const MIG = 'bp_builtin_co_kmb_v2';
+  if (!localStorage.getItem(MIG)){
+    const fix = new Set(BUILTIN_ROUTES.filter(b => b.co === 'KMB').map(b => b.route));
+    let changed = false;
+    favRoutes.forEach(f => { if (f.co === 'LWB' && fix.has(f.route)){ f.co = 'KMB'; changed = true; } });
+    if (changed) saveJSON('bp_routes', favRoutes);
+    localStorage.setItem(MIG, '1');
+  }
 })();
 let userTrips = loadJSON('bp_trips', []);
 let TT = loadJSON('bp_tt', {});
@@ -592,9 +602,29 @@ function presetMeta(c){
   return {route:c.route, bound, stype:Number(stype), list:L.list, sched:L.sched || {}, fare:L.fare || 0,
     basic:L.basic || {}, jt:L.jt || {}, t:L.capturedAt || 0, capturedAt:L.capturedAt || 0, preset:true};
 }
+const isBuiltin = c => BUILTIN_ROUTES.some(b => b.route === c.route);
 async function kmbRouteMeta(c){
   if (c.co !== 'KMB' && c.co !== 'LWB') return null;
   const route = c.route, bound = (c.dir === 'I' || String(c.dir) === '2') ? 2 : 1, stype = c.stype || '1';
+  // 内置线路：像 27A 一样直接带入随包静态班表，打开即用、不依赖在线查询。
+  // 若用户点过「更新本地数据」把官网班表缓存到本地，则优先用本地缓存覆盖静态值。
+  if (isBuiltin(c)){
+    const kwSched = loadJSON(`bp_kw:action=getschedule&route=${encodeURIComponent(route)}&bound=${bound}&serviceType=${stype}`, null);
+    const kwStops = loadJSON(`bp_kw:action=getstops&route=${encodeURIComponent(route)}&bound=${bound}&serviceType=${stype}`, null);
+    if (kwSched && kwSched.d && kwStops && kwStops.d && Array.isArray(kwStops.d.routeStops)){
+      const stops = kwStops.d, sched = kwSched.d;
+      const list = stops.routeStops.filter(x => /^F/i.test(String(x.Direction || '').trim()) && /^\d+$/.test(String(x.Seq)))
+        .sort((a,b) => (+a.Seq) - (+b.Seq))
+        .map(x => ({seq:+x.Seq, code:((String(x.CName).match(/\(([A-Z]{2}\d{2,5})\)/) || [])[1]) || '',
+          name:{tc:x.CName, sc:x.SCName || x.CName, en:x.EName}, fare:+x.AirFare || 0}));
+      return {route, bound, stype:Number(stype), list, sched,
+        fare:list.reduce((m,x) => Math.max(m, x.fare || 0), 0), basic:stops.basicInfo || {},
+        t:kwSched.t || Date.now(), capturedAt:kwSched.t || Date.now(), preset:false, localCached:true};
+    }
+    await loadSchedulePreset();
+    const pm = presetMeta({co:c.co, route, dir:c.dir, stype});
+    if (pm) return pm;
+  }
   const q1 = `route=${encodeURIComponent(route)}&bound=${bound}&serviceType=${stype}`;
   const [stops, sched] = await Promise.all([
     kmbWeb('getstops', q1),
@@ -1291,7 +1321,7 @@ function renderFavRoutes(){
   } else {
     favRoutes.forEach((f, i) => {
       const c = el('div','rt-result');
-      c.innerHTML = `${badge(f)}<div class="row-mid"><div class="row-dest">${esc(labelText(f) || '')}${f.builtin ? ' ⭐️' : ''}</div><div class="row-sub">${esc(coName(f.co))} · ${esc(f.route)}</div></div>${favEditMode? '<button class="trip-del">✕</button>' : ''}`;
+      c.innerHTML = `${badge(f)}<div class="row-mid"><div class="row-dest">${esc(labelText(f) || '')}</div><div class="row-sub">${esc(coName(f.co))} · ${esc(f.route)}</div></div>${favEditMode? '<button class="trip-del">✕</button>' : ''}`;
       c.onclick = ev => {
         if (favEditMode && ev.target && ev.target.classList.contains('trip-del')){
           favRoutes.splice(i,1); saveJSON('bp_routes', favRoutes); renderFavRoutes(); renderSettings();
@@ -1891,7 +1921,7 @@ function renderSettings(){
   if (!favRoutes.length) rb.innerHTML = `<div class="status-line">${T('favEmpty')}</div>`;
   favRoutes.forEach((f, i) => {
     const it = el('div','mgr-item');
-    it.innerHTML = `<span class="co-dot" style="background:${CO_COLOR[f.co]}"></span><div class="nm">${esc(f.route)}${f.label? ' · '+esc(labelText(f)):''}${f.builtin?' ⭐️':''}</div><button class="mgr-del">✕</button>`;
+    it.innerHTML = `<span class="co-dot" style="background:${CO_COLOR[f.co]}"></span><div class="nm">${esc(f.route)}${f.label? ' · '+esc(labelText(f)):''}</div><button class="mgr-del">✕</button>`;
     it.querySelector('.mgr-del').onclick = () => { favRoutes.splice(i,1); saveJSON('bp_routes', favRoutes); renderSettings(); renderFavRoutes(); };
     rb.appendChild(it);
   });
@@ -1951,6 +1981,17 @@ $('#btn-update-data').addEventListener('click', async () => {
   btn.disabled = true; toast(T('updateStart'));
   try {
     await precacheStatic();
+    // 内置线路：强制从官网抓取最新班表与站点，覆盖本地缓存（线路详情据此刷新，取代随包静态值）
+    for (const b of BUILTIN_ROUTES){
+      if (b.co === 'NLB'){ await getRouteStops(b, true).catch(()=>null); continue; }
+      for (const bound of [1, 2]){
+        const q = `route=${encodeURIComponent(b.route)}&bound=${bound}&serviceType=1`;
+        await kmbWeb('getschedule', `route=${encodeURIComponent(b.route)}&bound=${bound}&serviceType=1`, 0).catch(()=>null);
+        await kmbWeb('getstops', q, 0).catch(()=>null);
+      }
+      const c = {...b, co: b.co === 'KMB' || b.co === 'LWB' ? b.co : 'KMB'};
+      await getRouteStops(c, true).catch(()=>null);
+    }
     const keys = new Set(Object.keys(TT));
     favRoutes.forEach(f => { if (!f.static && f.co !== 'GMB') keys.add(ttKey(f)); });
     for (const k of keys){
