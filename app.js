@@ -2,7 +2,7 @@
 /* 27A / 806A / 806B 为内置静态时刻表（首末班时间 + 停靠站点），无实时查询 */
 'use strict';
 
-const VERSION = '1.5.3';
+const VERSION = '1.5.4';
 const BUILD = '2026-11-25';
 const DEFAULT_LOC = [22.4297, 114.203329];   // 雲滙：定位未更新时的默认坐标
 const NEARBY_R = 1000;                       // 附近站点半径（米）
@@ -44,7 +44,7 @@ const I18N = {
     nearLocBad:'未找到该位置，可试 雲滙 或 22.4297,114.2033',
     refreshing:'正在刷新…', hkOnly:'仅提供香港境内巴士查询', locModeLabel:'实时定位如下', nearSuffix:'附近',
     offlineEst:'离线推算 · 仅供参考', schedOn:'班表', schedStale:'班表可能已过期', freshNote:'基于', nextDay:'次日',
-    offlineState:'当前离线状态，最后更新于 {t}，到站时间为推算，仅供参考',
+    offlineState:'离线状态·最后更新 {t} 到站为推测·仅供参考',
     hkFallbackAirport:'当前定位将调整为机场站',
     liveKept:'实时数据 · 离线延续', liveAgo:'原更新于', liveStale:'实时数据已过期，改用班表推算',
   },
@@ -82,7 +82,7 @@ const I18N = {
     nearLocBad:'找不到該位置，可試 雲滙 或 22.4297,114.2033',
     refreshing:'正在刷新…', hkOnly:'僅提供香港境內巴士查詢', locModeLabel:'實時定位如下', nearSuffix:'附近',
     offlineEst:'離線推算 · 僅供參考', schedOn:'班表', schedStale:'班表可能已過期', freshNote:'基於', nextDay:'次日',
-    offlineState:'當前離線狀態，最後更新於 {t}，到站時間為推算，僅供參考',
+    offlineState:'離線狀態·最後更新 {t} 到站為推測·僅供參考',
     hkFallbackAirport:'當前定位將調整為機場站',
     liveKept:'實時數據 · 離線延續', liveAgo:'原更新於', liveStale:'實時數據已過期，改用班表推算',
   },
@@ -120,7 +120,7 @@ const I18N = {
     nearLocBad:'Location not found. Try St Martin or 22.4297,114.2033',
     refreshing:'Refreshing…', hkOnly:'Bus service is available in Hong Kong only', locModeLabel:'Live location below', nearSuffix:'nearby',
     offlineEst:'Offline estimate · for reference only', schedOn:'sched', schedStale:'schedule may be out of date', freshNote:'based on', nextDay:'next day',
-    offlineState:'Currently offline · last updated {t} · arrival times are estimates, for reference only',
+    offlineState:'Offline · last updated {t} · arrivals estimated, for reference only',
     hkFallbackAirport:'Location adjusted to Airport stop',
     liveKept:'Live data · kept offline', liveAgo:'was updated', liveStale:'Live data expired, using timetable',
   }
@@ -319,7 +319,7 @@ function dtStr(ts){ const d = new Date(ts); return `${d.getMonth()+1}/${d.getDat
 function offlineStatusLine(ts){
   const d = ts ? new Date(ts) : null;
   const stamp = (d && !isNaN(d))
-    ? `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
+    ? `${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
     : '—';
   return T('offlineState').replace('{t}', stamp);
 }
