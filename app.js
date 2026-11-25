@@ -2,8 +2,8 @@
 /* 27A / 806A / 806B 为内置静态时刻表（首末班时间 + 停靠站点），无实时查询 */
 'use strict';
 
-const VERSION = '1.4.3';
-const BUILD = '2026-11-23';
+const VERSION = '1.5.0';
+const BUILD = '2026-11-25';
 const DEFAULT_LOC = [22.4297, 114.203329];   // 雲滙：定位未更新时的默认坐标
 const NEARBY_R = 1000;                       // 附近站点半径（米）
 const NEARBY_GROUP_M = 90;                   // 同名站柱合并半径（米）
@@ -42,6 +42,8 @@ const I18N = {
     sort:'排序', sortEta:'按到站时间', sortAdd:'按添加顺序', sortRoute:'按线路号', nearLocInput:'输入站名或坐标定位', locateShort:'定位',
     locatingFallback:'定位中 · 暂用云汇坐标', firstTime:'首班', lastTime:'末班', kbEstimate:'按官网班表推算',
     nearLocBad:'未找到该位置，可试 雲滙 或 22.4297,114.2033',
+    refreshing:'正在刷新…', hkOnly:'仅提供香港境内巴士查询', locModeLabel:'实时定位如下', nearSuffix:'附近',
+    offlineEst:'离线推算 · 仅供参考', schedOn:'班表', schedStale:'班表可能已过期', freshNote:'基于', nextDay:'次日',
   },
   tc: {
     tabStops:'到站', tabTrips:'行程', tabRoute:'線路', tabNearby:'附近', tabMe:'我的',
@@ -75,6 +77,8 @@ const I18N = {
     sort:'排序', sortEta:'按到站時間', sortAdd:'按添加順序', sortRoute:'按線路號', nearLocInput:'輸入站名或坐標定位', locateShort:'定位',
     locatingFallback:'定位中 · 暫用雲滙座標', firstTime:'首班', lastTime:'末班', kbEstimate:'按官網班表推算',
     nearLocBad:'找不到該位置，可試 雲滙 或 22.4297,114.2033',
+    refreshing:'正在刷新…', hkOnly:'僅提供香港境內巴士查詢', locModeLabel:'實時定位如下', nearSuffix:'附近',
+    offlineEst:'離線推算 · 僅供參考', schedOn:'班表', schedStale:'班表可能已過期', freshNote:'基於', nextDay:'次日',
   },
   en: {
     tabStops:'Arrivals', tabTrips:'Trips', tabRoute:'Routes', tabNearby:'Nearby', tabMe:'Me',
@@ -108,6 +112,8 @@ const I18N = {
     sort:'Sort', sortEta:'By arrival', sortAdd:'By added order', sortRoute:'By route no.', nearLocInput:'Enter stop name or coordinates', locateShort:'Locate',
     locatingFallback:'Locating · using St Martin temporarily', firstTime:'First', lastTime:'Last', kbEstimate:'Estimated from official timetable',
     nearLocBad:'Location not found. Try St Martin or 22.4297,114.2033',
+    refreshing:'Refreshing…', hkOnly:'Bus service is available in Hong Kong only', locModeLabel:'Live location below', nearSuffix:'nearby',
+    offlineEst:'Offline estimate · for reference only', schedOn:'sched', schedStale:'schedule may be out of date', freshNote:'based on', nextDay:'next day',
   }
 };
 let lang = localStorage.getItem('bp_lang');
@@ -272,6 +278,8 @@ let boardGroup = null, boardSeq = 0, routeSeq = 0, tripSeq = 0, routeSearchT = n
 let tripJobs = [], tripRendered = false;
 let STOPCODES = loadJSON('bp_stopcodes', {});
 let nearLimit = 10, tripSort = localStorage.getItem('bp_trip_sort') || 'eta';
+// 实时定位展示态：locPlaceName = 最近站点名（含「附近」），非空时下拉弱化文案、顶部大字隐藏、地址行显示
+let locPlaceName = null, hkOutOfRange = false, userPickedGroup = localStorage.getItem('bp_user_picked') === '1';
 try { const _nl = loadJSON('bp_nearloc', null); if (_nl && _nl.length === 2) window._myLoc = _nl; } catch(e){}
 
 const $ = s => document.querySelector(s);
@@ -301,6 +309,62 @@ function hm(iso){ const d = new Date(iso); return isNaN(d) ? '' : d.toTimeString
 function dtStr(ts){ const d = new Date(ts); return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; }
 function myLoc(){ return window._myLoc || DEFAULT_LOC; }
 function hasGps(){ return !!window._myLoc; }
+/* 香港境内判定：经纬度范围 + 最近天文台观测站距离双保险 */
+function inHongKong(lat, lng){
+  if (!isFinite(lat) || !isFinite(lng)) return false;
+  if (lat < 22.15 || lat > 22.60 || lng < 113.80 || lng > 114.60) return false;
+  const st = nearestWxStation(lat, lng);
+  return !!st && dist(lat, lng, st.lat, st.lng) <= 60000;
+}
+/* 就近站点名（离线可用）：取用户语言对应站名 */
+let nearestStopName = (lat, lng) => {
+  if (!STOPS) return null;
+  let best = null, bd = Infinity;
+  const scan = arr => (arr || []).forEach(s => {
+    const la = +s[4], lo = +s[5];
+    if (!isFinite(la) || !isFinite(lo)) return;
+    const d = dist(lat, lng, la, lo);
+    if (d < bd){ bd = d; best = s; }
+  });
+  scan(STOPS.kmb); scan(STOPS.ctb);
+  if (!best) return null;
+  return lang === 'tc' ? best[1] : lang === 'en' ? best[3] : best[2];
+};
+/* 实时定位展示态：更新下拉文案、地址行、顶部大字、位置状态行 */
+function renderLocDisplay(){
+  const label = $('#quick-label'), pin = $('#quick-trigger .quick-pin');
+  const place = $('#loc-place'), placeTxt = $('#loc-place-text');
+  const title = $('#station-title'), line = $('#loc-line');
+  const locating = !!locPlaceName;
+  if (label){
+    if (hkOutOfRange){ label.textContent = T('hkOnly'); label.style.color = ''; }
+    else if (locating){ label.textContent = T('locModeLabel'); label.style.color = 'var(--muted)'; }
+    else { label.style.color = ''; }
+  }
+  if (pin) pin.textContent = (locating && !hkOutOfRange) ? '◎' : '▦';
+  if (place){
+    if (locating && !hkOutOfRange && placeTxt){ placeTxt.textContent = locPlaceName + ' ' + T('nearSuffix'); place.classList.add('show'); }
+    else place.classList.remove('show');
+  }
+  if (line){
+    if (hkOutOfRange){ line.textContent = T('hkOnly'); line.classList.add('hk-warn'); }
+    else { line.classList.remove('hk-warn'); line.textContent = hasGps() ? T('locUpdated') : T('locDefault'); }
+  }
+  // 顶部大字：定位展示态 / 境外态时隐藏；且只影响到站页
+  if (title){
+    if (activeView() === 'stop' && (locating || hkOutOfRange)) title.textContent = '';
+    else if (activeView() === 'stop'){
+      const g = findGroup(curGroup);
+      title.textContent = g ? groupName(g) : (lang === 'en' ? 'Bus ETA' : '巴士到站');
+    }
+  }
+  syncTopbar();
+}
+/* 用户在下拉里重新选了快捷站点：清除定位展示态，恢复字体颜色与顶部大字 */
+function clearLocDisplay(){
+  locPlaceName = null; hkOutOfRange = false;
+  userPickedGroup = true; localStorage.setItem('bp_user_picked', '1');
+}
 async function loadStopCodes(){
   if (Object.keys(STOPCODES).length > 100) return;
   try { const d = await jget('data/stopcodes.json'); STOPCODES = (d && d.codes) || STOPCODES; saveJSON('bp_stopcodes', STOPCODES); } catch(e){}
@@ -473,6 +537,22 @@ async function kmbWeb(action, params, ttl){
     return j.data;
   } catch(e){ return hit ? hit.d : null; }
 }
+/* 预置班表（离线推算兜底）：随包发布、SW 缓存，用户清空 localStorage 后仍可用 */
+let SCHED_PRESET = null, schedPresetTried = false;
+async function loadSchedulePreset(){
+  if (schedPresetTried) return SCHED_PRESET;
+  schedPresetTried = true;
+  try { SCHED_PRESET = await jgetSoft('data/schedule.json'); } catch(e){ SCHED_PRESET = null; }
+  return SCHED_PRESET;
+}
+function presetMeta(c){
+  if (!SCHED_PRESET || !SCHED_PRESET.lines) return null;
+  const bound = (c.dir === 'I' || String(c.dir) === '2') ? 2 : 1, stype = String(c.stype || '1');
+  const L = SCHED_PRESET.lines[`${c.route}|${bound}|${stype}`];
+  if (!L || !Array.isArray(L.list)) return null;
+  return {route:c.route, bound, stype:Number(stype), list:L.list, sched:L.sched || {}, fare:L.fare || 0,
+    basic:L.basic || {}, jt:L.jt || {}, t:L.capturedAt || 0, capturedAt:L.capturedAt || 0, preset:true};
+}
 async function kmbRouteMeta(c){
   if (c.co !== 'KMB' && c.co !== 'LWB') return null;
   const route = c.route, bound = (c.dir === 'I' || String(c.dir) === '2') ? 2 : 1, stype = c.stype || '1';
@@ -481,13 +561,19 @@ async function kmbRouteMeta(c){
     kmbWeb('getstops', q1),
     kmbWeb('getschedule', `route=${encodeURIComponent(route)}&bound=${bound}&serviceType=${stype}`)
   ]);
-  if (!stops || !Array.isArray(stops.routeStops)) return null;
+  // 缓存缺失（离线且官网缓存被清）：回落到随包预置班表
+  if (!stops || !Array.isArray(stops.routeStops)){
+    await loadSchedulePreset();
+    return presetMeta({co:c.co, route, dir:c.dir, stype});
+  }
   const list = stops.routeStops.filter(x => /^F/i.test(String(x.Direction || '').trim()) && /^\d+$/.test(String(x.Seq)))
     .sort((a,b) => (+a.Seq) - (+b.Seq))
     .map(x => ({seq:+x.Seq, code:((String(x.CName).match(/\(([A-Z]{2}\d{2,5})\)/) || [])[1]) || '',
       name:{tc:x.CName, sc:x.SCName || x.CName, en:x.EName}, fare:+x.AirFare || 0}));
   const fare = list.reduce((m,x) => Math.max(m, x.fare || 0), 0);
-  return {route, bound, stype:Number(stype), list, sched, fare, basic:stops.basicInfo || {}, t:Date.now()};
+  const kwHit = loadJSON(`bp_kw:action=getschedule&route=${encodeURIComponent(route)}&bound=${bound}&serviceType=${stype}`, null);
+  return {route, bound, stype:Number(stype), list, sched, fare, basic:stops.basicInfo || {},
+    t:Date.now(), capturedAt:(kwHit && kwHit.t) || Date.now(), preset:false};
 }
 function hhmmToMin(str){
   const m = String(str || '').replace(/[\*\s]/g,'').match(/(\d{1,2}):(\d{2})/);
@@ -558,10 +644,15 @@ function nextDeparture(sched, date){
     if (!nexts.length) return null;
     pick = nexts.reduce((a,b)=> b.t < a.t ? b : a);
   }
-  return {time:new Date(base + pick.t*60000), head:pick.head || (sched.windows[0]?.head || 0), sched};
+  return {time:new Date(base + pick.t*60000), head:pick.head || (sched.windows[0]?.head || 0), sched, nextDay:pick.t >= 1440};
 }
 async function kmbJourney(meta, seq1, seq2){
   if (seq1 == null || seq2 == null || seq1 === seq2) return 0;
+  // 预置数据：行车时间按 seq 存，离线直接取
+  if (meta.preset && meta.jt && meta.jt[String(seq2)] != null){
+    const pv = Number(meta.jt[String(seq2)]);
+    if (pv >= 0) return pv;
+  }
   const q = `route=${encodeURIComponent(meta.route)}&bound=${meta.bound}&serviceType=${meta.stype}&seq1=${seq1}&seq2=${seq2}`;
   const d = await kmbWeb('getjtbyfromtostop', q, 30*86400e3);
   const v = d && Number(d.Journey_time);
@@ -578,7 +669,8 @@ async function kmbEstimate(c, stopId){
   const target = code ? meta.list.find(x => x.code === code) : null;
   const jt = target ? await kmbJourney(meta, 0, target.seq) : null;
   return {dep:dep.time, head:dep.head, arrive:jt != null ? new Date(dep.time.getTime() + jt*1000) : null,
-    fare:meta.fare, first:sched.first, last:sched.last, code:code || (target ? target.code : ''), stopName:target ? nm(target.name) : ''};
+    fare:meta.fare, first:sched.first, last:sched.last, code:code || (target ? target.code : ''), stopName:target ? nm(target.name) : '',
+    capturedAt:meta.capturedAt || 0, preset:!!meta.preset, nextDay:!!dep.nextDay};
 }
 async function enrichBoardEstimates(rows){
   const jobs = rows.filter(r => !r.etas || !r.etas.length || r.etas[0].min == null)
@@ -661,6 +753,7 @@ function renderWeather(v){
     const more = [p, temp != null ? temp + '°C' : '', wxDesc(w.code), w.hum != null ? T('humidity') + ' ' + w.hum + '%' : ''].filter(Boolean);
     toast(more.join(' · ') + (w.warn ? ' · ⚠️ ' + w.warn : ''));
   };
+  syncTopbar();   // 天气胶囊换行会改变顶栏高度，及时同步 --tb-h 避免遮挡
 }
 
 /* ================= 刷新调度 ================= */
@@ -739,7 +832,7 @@ function renderChips(){
   menu.innerHTML = '';
   const gps = el('button', 'quick-item gps');
   gps.innerHTML = `<span class="qi-ico">📍</span><span class="qi-name">${esc(T('locateBtn'))}</span>`;
-  gps.onclick = (ev) => { ev.stopPropagation(); closeQuickMenu(); switchView('nearby'); locateAndRender(); };
+  gps.onclick = (ev) => { ev.stopPropagation(); closeQuickMenu(); locateAndRender(); };
   menu.appendChild(gps);
   const loc = myLoc();
   gs.forEach(g => {
@@ -748,11 +841,13 @@ function renderChips(){
     if (g.lat){ const d = dist(loc[0], loc[1], g.lat, g.lng); distHtml = `<span class="dist">${d<1000? Math.round(d)+'m' : (d/1000).toFixed(1)+'km'}</span>`; }
     b.innerHTML = `<span class="qi-ico">▦</span><span class="qi-name">${esc(groupName(g))}</span>${distHtml}`;
     b.onclick = (ev) => {
-      ev.stopPropagation(); curGroup = g.id; localStorage.setItem('bp_cur', g.id);
-      closeQuickMenu(); renderChips(); renderBoard();
+      ev.stopPropagation(); clearLocDisplay();
+      curGroup = g.id; localStorage.setItem('bp_cur', g.id);
+      closeQuickMenu(); renderChips(); renderBoard(); renderLocDisplay();
     };
     menu.appendChild(b);
   });
+  renderLocDisplay();
   renderWeather(WXC && WXC.v);
 }
 function toggleQuickMenu(){
@@ -796,12 +891,20 @@ function sortRows(rows){
 }
 function rowKey(r){ return [r.co, r.route, r.stype ?? '', r.dir ?? '', r.stop ?? ''].join('|'); }
 function isFav(r){ return favRoutes.some(f => f.co === r.co && f.route === r.route); }
+function ttFreshTag(tt){
+  if (!tt || !tt.capturedAt) return '';
+  const d = new Date(tt.capturedAt);
+  if (isNaN(d)) return '';
+  const md = `${d.getMonth()+1}/${d.getDate()}`;
+  const stale = Date.now() - tt.capturedAt > 30*86400e3;
+  return `<span class="tt-fresh${stale ? ' stale' : ''}">(${esc(T('schedOn'))} ${md}${stale ? ' · '+esc(T('schedStale')) : ''})</span>`;
+}
 function rowHtml(r){
   const dest = nm(r.dest);
   const e0 = (r.etas && r.etas[0]) || {min:null};
   const live = e0.min != null;
   const etaHtml = live ? fmtMin(e0.min)
-    : (r.tt ? `<div class="eta-min tt-eta">${esc(hm(r.tt.arrive || r.tt.dep))}</div><div class="eta-next">${esc(T('nextDep'))} ${esc(hm(r.tt.dep))} ${esc(T('depAt'))}${r.tt.arrive ? ' · '+esc(T('estArrive'))+' '+esc(hm(r.tt.arrive)) : ''}</div>` : fmtMin(null));
+    : (r.tt ? `<div class="eta-min tt-eta">${r.tt.nextDay ? '<span class="tt-day">'+esc(T('nextDay'))+'</span>' : ''}${esc(hm(r.tt.arrive || r.tt.dep))}</div><div class="eta-next">${esc(T('nextDep'))} ${esc(hm(r.tt.dep))} ${esc(T('depAt'))}${r.tt.arrive ? ' · '+esc(T('estArrive'))+' '+esc(hm(r.tt.arrive)) : ''}</div>${ttFreshTag(r.tt)}` : fmtMin(null));
   const nextHtml = live && r.etas.length > 1 ? `<div class="eta-next">${T('later')} ${r.etas.slice(1).map(e=>e.min+'′').join(' / ')}</div>` : '';
   const rmkTag = e0.rmk ? `<span class="tag">${esc(e0.rmk)}</span>` : '';
   const code = isRealCode(r.co, r.stop) ? ' · ' + esc(stopCode(r.co, r.stop)) : '';
@@ -852,8 +955,7 @@ async function renderBoard(){
     curGroup = gs[0].id; localStorage.setItem('bp_cur', curGroup);
     g = gs[0]; renderChips();
   }
-  $('#station-title').textContent = lang==='tc' ? g.name_tc : lang==='en' ? (g.name_en || g.name_sc) : g.name_sc;
-  $('#loc-line').textContent = hasGps() ? T('locUpdated') : T('locDefault');
+  renderLocDisplay();   // 统一处理顶部大字 / 位置状态行（定位展示态时隐藏大字）
   renderWeather(WXC && WXC.v);   // 只更新天气，不重建 chips（避免定时刷新把横向滚动位置重置）
   syncTopbar();
   const cache = boardCache(g.id);
@@ -864,10 +966,19 @@ async function renderBoard(){
   } else if (changed){
     $('#board-status').textContent = T('loading');
   }
-  // 离线：直接使用本地缓存的线路清单，不再发无效请求，也不覆盖为空白
+  // 离线：用本地缓存的线路清单，并按班表推算下一班（在线缓存 → 官网缓存 → 随包预置）
   if (!navigator.onLine){
-    if (cache) paintBoard(cache.rows.map(r => ({...r, etas:[]})));
+    const liveRows = cache ? cache.rows.map(r => ({...r, etas:[]})) : [];
+    paintBoard(liveRows);
     $('#board-status').textContent = `${T('offline')}${cache && cache.t ? ' · ' + T('offlineData') + ' ' + dtStr(cache.t) : ''}`;
+    if (liveRows.length){
+      const offlineChanged = await enrichBoardEstimates(liveRows);
+      if (offlineChanged && seq === boardSeq){
+        paintBoard(liveRows);
+        saveBoardStatic(g.id, liveRows);
+        $('#board-status').textContent = `${T('offline')} · ${T('offlineEst')}`;
+      }
+    }
     return;
   }
   let rows = [];
@@ -1258,7 +1369,9 @@ async function enrichSearchResult(r, node){
     if (est) break;
   }
   if (est && node.isConnected){
-    const e = el('div','rt-eta', `${T('nextDep')} ${esc(hm(est.dep))} ${esc(T('depAt'))}${est.arrive ? ' · '+T('estArrive')+' '+esc(hm(est.arrive)) : ''}`);
+    const e = el('div','rt-eta', `${est.nextDay ? esc(T('nextDay'))+' · ' : ''}${T('nextDep')} ${esc(hm(est.dep))} ${esc(T('depAt'))}${est.arrive ? ' · '+T('estArrive')+' '+esc(hm(est.arrive)) : ''}`);
+    const tag = ttFreshTag(est);
+    if (tag) e.insertAdjacentHTML('beforeend', tag);
     node.appendChild(e);
   }
 }
@@ -1475,7 +1588,7 @@ async function renderRouteBoard(){
 }
 /* ================= 快捷站点栏交互 ================= */
 $('#quick-trigger').addEventListener('click', e => { e.stopPropagation(); toggleQuickMenu(); });
-$('#quick-locate').addEventListener('click', e => { e.stopPropagation(); closeQuickMenu(); switchView('nearby'); locateAndRender(); });
+$('#quick-locate').addEventListener('click', e => { e.stopPropagation(); closeQuickMenu(); locateAndRender(); });
 document.addEventListener('click', e => {
   const row = $('#chips-row'), menu = $('#chips');
   if (menu && !menu.hidden && row && !row.contains(e.target)) closeQuickMenu();
@@ -1499,8 +1612,35 @@ function locateAndRender(){
   window._myLoc = DEFAULT_LOC.slice();
   st.textContent = T('locatingFallback');
   if (activeView() === 'nearby') renderNearby(true);
-  navigator.geolocation.getCurrentPosition(pos => {
-    setManualLoc([pos.coords.latitude, pos.coords.longitude], T('locUpdated'));
+  else { const ll = $('#loc-line'); if (ll){ ll.classList.remove('hk-warn'); ll.textContent = T('locating'); } }
+  navigator.geolocation.getCurrentPosition(async pos => {
+    const la = pos.coords.latitude, lo = pos.coords.longitude;
+    if (!inHongKong(la, lo)){
+      // 境外：提示 + 不采用境外坐标；下拉默认切到机场（仅在用户未手动选过时）
+      hkOutOfRange = true; locPlaceName = null;
+      window._myLoc = DEFAULT_LOC.slice(); saveJSON('bp_nearloc', window._myLoc);
+      toast(T('hkOnly'));
+      if (!userPickedGroup){
+        const ap = groupList().find(g => g.id === 'airport');
+        if (ap){ curGroup = ap.id; localStorage.setItem('bp_cur', curGroup); }
+      }
+      st.textContent = T('hkOnly');
+      if (activeView() === 'nearby') renderNearby(true);
+      else { renderChips(); renderBoard(); }
+      renderLocDisplay();
+      return;
+    }
+    // 境内：正常采用 GPS，默认站点组在用户未手动选过时切回雲滙
+    hkOutOfRange = false;
+    setManualLoc([la, lo], null);
+    if (!userPickedGroup){
+      const yh = groupList().find(g => g.id === 'yunhui');
+      if (yh){ curGroup = yh.id; localStorage.setItem('bp_cur', curGroup); }
+    }
+    await loadStops();
+    const nm = nearestStopName(la, lo);
+    locPlaceName = nm || null;
+    renderChips(); renderBoard(); renderLocDisplay();
   }, () => { st.textContent = T('locDefault'); toast(T('locFail')); }, {enableHighAccuracy:true, timeout:10000});
 }
 $('#near-go').addEventListener('click', async () => {
@@ -1917,9 +2057,18 @@ function applyLang(){
   if ($('#near-go')) $('#near-go').textContent = T('locateShort');
   if ($('#near-input')) $('#near-input').placeholder = T('nearLocInput');
 }
-$('#btn-refresh').addEventListener('click', () => {
-  refreshCurrent();
-  if (activeView() === 'stop') refreshWeather(true);
+$('#btn-refresh').addEventListener('click', async () => {
+  const b = $('#btn-refresh');
+  b.classList.add('spinning');
+  toast(T('refreshing'));
+  startTimer();   // 手动刷新后自动刷新倒计时重新开始
+  try {
+    await refreshCurrent();
+    if (activeView() === 'stop') await refreshWeather(true);
+  } finally {
+    b.classList.remove('spinning');
+    toast(T('updated') + ' ' + new Date().toTimeString().slice(0,5));
+  }
 });
 document.querySelectorAll('#seg-trip-sort button').forEach(b => b.addEventListener('click', () => {
   tripSort = b.dataset.sort; localStorage.setItem('bp_trip_sort', tripSort); sortTripCards();

@@ -1,13 +1,13 @@
 /* 巴士到站 PWA Service Worker —— 离线优先 */
-const SHELL = 'bus-shell-v9';
-const DATA = 'bus-data-v1';
+const SHELL = 'bus-shell-v11';
+const DATA = 'bus-data-v2';
 const SHELL_FILES = [
-  './', './index.html', './style.css?v=135', './app.js?v=135', './manifest.webmanifest', './data/stopcodes.json',
+  './', './index.html', './style.css?v=138', './app.js?v=138', './manifest.webmanifest', './data/stopcodes.json',
   './icons/icon-192.png', './icons/icon-512.png', './icons/icon-180.png'
 ];
 const DATA_FILES = [
   './data/quickstops.json', './data/trips.json', './data/links.json',
-  './data/stops.json', './data/routes.json', './data/routestop.json'
+  './data/stops.json', './data/routes.json', './data/routestop.json', './data/schedule.json'
 ];
 
 self.addEventListener('install', e => {
