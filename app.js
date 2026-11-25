@@ -2,7 +2,7 @@
 /* 27A / 806A / 806B 为内置静态时刻表（首末班时间 + 停靠站点），无实时查询 */
 'use strict';
 
-const VERSION = '1.5.4';
+const VERSION = '1.5.5';
 const BUILD = '2026-11-25';
 const DEFAULT_LOC = [22.4297, 114.203329];   // 雲滙：定位未更新时的默认坐标
 const NEARBY_R = 1000;                       // 附近站点半径（米）
@@ -134,6 +134,8 @@ if (!I18N[lang]) lang = 'sc';
 const T = k => (I18N[lang] && I18N[lang][k]) || I18N.sc[k] || k;
 const pickB = o => { if (!o) return ''; const v = lang === 'en' ? (o.en || o.sc) : lang === 'tc' ? (o.tc || o.sc) : (o.sc || o.tc); return v || ''; };
 const nm = o => pickB(o);
+// 收藏标签兼容旧的字符串与新的三语对象
+const labelText = f => !f ? '' : (typeof f.label === 'string' ? f.label : nm(f.label));
 
 /* ================= API ================= */
 const LQ = () => lang === 'tc' ? 'zh-hant' : 'zh-hans';
@@ -269,6 +271,26 @@ let QUICK = [], TRIPS = [], ROUTES = null, RSTOPS = null, STOPS = null, LINKS = 
 let curGroup = localStorage.getItem('bp_cur') || null;
 let userStops = loadJSON('bp_stops', []);
 let favRoutes = loadJSON('bp_routes', []);
+// 内置默认关注线路：首次运行注入一次，之后尊重用户的收藏/取消操作
+const BUILTIN_ROUTES = [
+  {co:'KMB', route:'272X', stype:'1', dir:'O', label:{sc:'大埔中心 → 旺角东站', tc:'大埔中心 → 旺角東站', en:'Tai Po Central → Mong Kok East'}},
+  {co:'KMB', route:'272A', stype:'1', dir:'O', label:{sc:'大学站 → 白石角', tc:'大學站 → 白石角', en:'University → Pak Shek Kok'}},
+  {co:'NLB', route:'B12', routeId:117, label:{sc:'乌溪沙站 → 皇岗口岸', tc:'烏溪沙站 → 皇崗口岸', en:'Wu Kai Sha → Huanggang Port'}},
+  {co:'KMB', route:'900', stype:'1', dir:'O', label:{sc:'白石角 → 湾仔会展', tc:'白石角 → 灣仔會展', en:'Pak Shek Kok → Wan Chai'}},
+  {co:'LWB', route:'A47X', stype:'1', dir:'I', label:{sc:'机场 → 大埔太和', tc:'機場 → 大埔太和', en:'Airport → Tai Po (Tai Wo)'}},
+  {co:'LWB', route:'A41', stype:'1', dir:'I', label:{sc:'机场 → 硕门邨', tc:'機場 → 碩門邨', en:'Airport → Shek Mun Estate'}},
+  {co:'LWB', route:'A42', stype:'1', dir:'I', label:{sc:'机场 → 黄泥头', tc:'機場 → 黃泥頭', en:'Airport → Wong Nai Tau'}},
+  {co:'LWB', route:'A46', stype:'1', dir:'I', label:{sc:'机场 → 火炭骏景园', tc:'機場 → 火炭駿景園', en:'Airport → Fo Tan (Royal Ascot)'}},
+  {co:'LWB', route:'E42', stype:'1', dir:'I', label:{sc:'机场 → 博康', tc:'機場 → 博康', en:'Airport → Pok Hong'}},
+];
+(function injectBuiltinRoutes(){
+  const KEY = 'bp_builtin_routes_v1';
+  if (localStorage.getItem(KEY)) return;
+  const have = new Set(favRoutes.map(f => f.co + ':' + f.route));
+  BUILTIN_ROUTES.forEach(b => { if (!have.has(b.co + ':' + b.route)) favRoutes.push({...b, builtin:true}); });
+  localStorage.setItem(KEY, '1');
+  saveJSON('bp_routes', favRoutes);
+})();
 let userTrips = loadJSON('bp_trips', []);
 let TT = loadJSON('bp_tt', {});
 let INFO = loadJSON('bp_info', {trip:{}, route:{}});
@@ -1269,7 +1291,7 @@ function renderFavRoutes(){
   } else {
     favRoutes.forEach((f, i) => {
       const c = el('div','rt-result');
-      c.innerHTML = `${badge(f)}<div class="row-mid"><div class="row-dest">${esc(f.label || '')}</div><div class="row-sub">${esc(coName(f.co))} · ${esc(f.route)}</div></div>${favEditMode? '<button class="trip-del">✕</button>' : ''}`;
+      c.innerHTML = `${badge(f)}<div class="row-mid"><div class="row-dest">${esc(labelText(f) || '')}${f.builtin ? ' ⭐️' : ''}</div><div class="row-sub">${esc(coName(f.co))} · ${esc(f.route)}</div></div>${favEditMode? '<button class="trip-del">✕</button>' : ''}`;
       c.onclick = ev => {
         if (favEditMode && ev.target && ev.target.classList.contains('trip-del')){
           favRoutes.splice(i,1); saveJSON('bp_routes', favRoutes); renderFavRoutes(); renderSettings();
@@ -1869,7 +1891,7 @@ function renderSettings(){
   if (!favRoutes.length) rb.innerHTML = `<div class="status-line">${T('favEmpty')}</div>`;
   favRoutes.forEach((f, i) => {
     const it = el('div','mgr-item');
-    it.innerHTML = `<span class="co-dot" style="background:${CO_COLOR[f.co]}"></span><div class="nm">${esc(f.route)}${f.label? ' · '+esc(f.label):''}</div><button class="mgr-del">✕</button>`;
+    it.innerHTML = `<span class="co-dot" style="background:${CO_COLOR[f.co]}"></span><div class="nm">${esc(f.route)}${f.label? ' · '+esc(labelText(f)):''}${f.builtin?' ⭐️':''}</div><button class="mgr-del">✕</button>`;
     it.querySelector('.mgr-del').onclick = () => { favRoutes.splice(i,1); saveJSON('bp_routes', favRoutes); renderSettings(); renderFavRoutes(); };
     rb.appendChild(it);
   });
