@@ -2,7 +2,7 @@
 /* 27A / 806A / 806B 为内置静态时刻表（首末班时间 + 停靠站点），无实时查询 */
 'use strict';
 
-const VERSION = '1.5.2';
+const VERSION = '1.5.3';
 const BUILD = '2026-11-25';
 const DEFAULT_LOC = [22.4297, 114.203329];   // 雲滙：定位未更新时的默认坐标
 const NEARBY_R = 1000;                       // 附近站点半径（米）
@@ -15,7 +15,7 @@ const I18N = {
     secAppearance:'外观与语言', language:'界面语言', theme:'主题', themeLight:'浅色', themeDark:'深色',
     refreshInterval:'自动刷新间隔', myStops:'常用站点', myRoutes:'关注线路', dataSec:'数据与离线',
     lastUpdate:'本地数据更新于', updateData:'更新本地数据', exportData:'导出我的数据', importData:'导入我的数据',
-    install:'安装到主屏幕', version:'版本', copyright:'© 2026 巴士到站 · 保留所有权利',
+    install:'安装到主屏幕', version:'版本', copyright:'© 2026 RTKG · 保留所有权利',
     about:'数据来源：香港特区政府 DATA.GOV.HK（运输署开放数据）及香港天文台。到站数据约 1 分钟更新，班次信息仅供参考，请以现场为准。',
     addStopBtn:'+ 添加站点', addStop:'添加站点', searchStop:'搜索站点名称，如 金钟 / 大学站', searchHint:'输入站名或站码',
     noResult:'没有匹配结果', addOk:'已添加', addedAlready:'已存在', addFail:'请先输入站名',
@@ -44,6 +44,7 @@ const I18N = {
     nearLocBad:'未找到该位置，可试 雲滙 或 22.4297,114.2033',
     refreshing:'正在刷新…', hkOnly:'仅提供香港境内巴士查询', locModeLabel:'实时定位如下', nearSuffix:'附近',
     offlineEst:'离线推算 · 仅供参考', schedOn:'班表', schedStale:'班表可能已过期', freshNote:'基于', nextDay:'次日',
+    offlineState:'当前离线状态，最后更新于 {t}，到站时间为推算，仅供参考',
     hkFallbackAirport:'当前定位将调整为机场站',
     liveKept:'实时数据 · 离线延续', liveAgo:'原更新于', liveStale:'实时数据已过期，改用班表推算',
   },
@@ -52,7 +53,7 @@ const I18N = {
     secAppearance:'外觀與語言', language:'介面語言', theme:'主題', themeLight:'淺色', themeDark:'深色',
     refreshInterval:'自動刷新間隔', myStops:'常用站點', myRoutes:'關注線路', dataSec:'數據與離線',
     lastUpdate:'本地數據更新於', updateData:'更新本地數據', exportData:'匯出我的數據', importData:'匯入我的數據',
-    install:'安裝到主畫面', version:'版本', copyright:'© 2026 巴士到站 · 保留所有權利',
+    install:'安裝到主畫面', version:'版本', copyright:'© 2026 RTKG · 保留所有權利',
     about:'資料來源：香港特區政府 DATA.GOV.HK（運輸署開放數據）及香港天文台。到站數據約 1 分鐘更新，班次資訊僅供參考，請以現場為準。',
     addStopBtn:'+ 添加站點', addStop:'添加站點', searchStop:'搜尋站點名稱，如 金鐘 / 大學站', searchHint:'輸入站名或站碼',
     noResult:'沒有匹配結果', addOk:'已添加', addedAlready:'已存在', addFail:'請先輸入站名',
@@ -81,6 +82,7 @@ const I18N = {
     nearLocBad:'找不到該位置，可試 雲滙 或 22.4297,114.2033',
     refreshing:'正在刷新…', hkOnly:'僅提供香港境內巴士查詢', locModeLabel:'實時定位如下', nearSuffix:'附近',
     offlineEst:'離線推算 · 僅供參考', schedOn:'班表', schedStale:'班表可能已過期', freshNote:'基於', nextDay:'次日',
+    offlineState:'當前離線狀態，最後更新於 {t}，到站時間為推算，僅供參考',
     hkFallbackAirport:'當前定位將調整為機場站',
     liveKept:'實時數據 · 離線延續', liveAgo:'原更新於', liveStale:'實時數據已過期，改用班表推算',
   },
@@ -89,7 +91,7 @@ const I18N = {
     secAppearance:'Appearance & Language', language:'Language', theme:'Theme', themeLight:'Light', themeDark:'Dark',
     refreshInterval:'Auto refresh', myStops:'Saved stops', myRoutes:'Favourite routes', dataSec:'Data & Offline',
     lastUpdate:'Local data updated', updateData:'Update local data', exportData:'Export my data', importData:'Import my data',
-    install:'Add to Home Screen', version:'Version', copyright:'© 2026 Bus ETA · All rights reserved',
+    install:'Add to Home Screen', version:'Version', copyright:'© 2026 RTKG · All rights reserved',
     about:'Source: DATA.GOV.HK (Transport Department open data) and Hong Kong Observatory. ETA refreshed within 1 minute. For reference only.',
     addStopBtn:'+ Add stop', addStop:'Add stop', searchStop:'Search stop name, e.g. Admiralty / University', searchHint:'Name or stop code',
     noResult:'No match', addOk:'Added', addedAlready:'Already added', addFail:'Please type a name first',
@@ -118,6 +120,7 @@ const I18N = {
     nearLocBad:'Location not found. Try St Martin or 22.4297,114.2033',
     refreshing:'Refreshing…', hkOnly:'Bus service is available in Hong Kong only', locModeLabel:'Live location below', nearSuffix:'nearby',
     offlineEst:'Offline estimate · for reference only', schedOn:'sched', schedStale:'schedule may be out of date', freshNote:'based on', nextDay:'next day',
+    offlineState:'Currently offline · last updated {t} · arrival times are estimates, for reference only',
     hkFallbackAirport:'Location adjusted to Airport stop',
     liveKept:'Live data · kept offline', liveAgo:'was updated', liveStale:'Live data expired, using timetable',
   }
@@ -313,6 +316,13 @@ function fmtMin(m){ if (m === null || m === undefined) return `<span class="eta-
   return `<div class="eta-min">${m}<span class="u"> ${T('min')}</span></div>`; }
 function hm(iso){ const d = new Date(iso); return isNaN(d) ? '' : d.toTimeString().slice(0,5); }
 function dtStr(ts){ const d = new Date(ts); return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; }
+function offlineStatusLine(ts){
+  const d = ts ? new Date(ts) : null;
+  const stamp = (d && !isNaN(d))
+    ? `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
+    : '—';
+  return T('offlineState').replace('{t}', stamp);
+}
 function myLoc(){ return window._myLoc || DEFAULT_LOC; }
 function hasGps(){ return !!window._myLoc; }
 /* 香港境内判定：经纬度范围 + 最近天文台观测站距离双保险 */
@@ -998,23 +1008,19 @@ async function renderBoard(){
   }
   // 离线：先按绝对到站时刻衰减延续在线时的实时数据，剩余无实时数据的行再按班表推算
   if (!navigator.onLine){
-    if (!cache){ $('#board').innerHTML = ''; $('#board-status').textContent = T('offline'); return; }
+    if (!cache){ $('#board').innerHTML = ''; $('#board-status').textContent = offlineStatusLine(0); return; }
     const revived = reviveLiveEtas(cache.rows, cache.t);
     const merged = revived.rows.slice();
     paintBoard(merged);
-    const ago = cache.t ? ' · ' + T('liveAgo') + ' ' + dtStr(cache.t) : '';
-    $('#board-status').textContent = revived.kept
-      ? `${T('offline')} · ${T('liveKept')}${ago}`
-      : `${T('offline')}${cache.t ? ' · ' + T('offlineData') + ' ' + dtStr(cache.t) : ''}`;
+    // 状态行统一为一句固定文案，不随数据来源拼接，避免冗长
+    $('#board-status').textContent = offlineStatusLine(cache.t);
     // 仅对没有实时数据的行做班表推算
     const noLive = merged.filter(r => !r._liveKept && (r.co === 'KMB' || r.co === 'LWB'));
     if (noLive.length){
       const offlineChanged = await enrichBoardEstimates(noLive);
       // 注意：离线不回写 saveBoardStatic，否则会覆盖在线实时快照并刷新时间戳，使数据"永不过期"
-      if (offlineChanged && seq === boardSeq){
-        paintBoard(merged);
-        $('#board-status').textContent = `${T('offline')} · ${T('liveKept')}${ago} · ${T('offlineEst')}`;
-      }
+      // 状态行不再追加推算来源，保持精简
+      if (offlineChanged && seq === boardSeq) paintBoard(merged);
     }
     return;
   }
