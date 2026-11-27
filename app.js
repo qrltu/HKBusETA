@@ -2,7 +2,7 @@
 /* 27A / 806A / 806B 为内置静态时刻表（首末班时间 + 停靠站点），无实时查询 */
 'use strict';
 
-const VERSION = '1.6.0';
+const VERSION = '1.6.1';
 const BUILD = '2026-11-25';
 const DEFAULT_LOC = [22.4297, 114.203329];   // 雲滙：定位未更新时的默认坐标
 const NEARBY_R = 1000;                       // 附近站点半径（米）
@@ -1550,9 +1550,21 @@ async function enrichSearchResult(r, node){
     if (est) break;
   }
   if (est && node.isConnected){
-    const e = el('div','rt-eta', `${est.nextDay ? esc(T('nextDay'))+' · ' : ''}${T('nextDep')} ${esc(hm(est.dep))} ${esc(T('depAt'))}${est.arrive ? ' · '+T('estArrive')+' '+esc(hm(est.arrive)) : ''}`);
+    // 班表推算以「？」备注呈现：默认仅显示问号标记，点击展开/收起推算详情
+    const e = el('div','rt-eta');
     const tag = ttFreshTag(est);
-    if (tag) e.insertAdjacentHTML('beforeend', tag);
+    const note = `${est.nextDay ? esc(T('nextDay'))+' · ' : ''}${T('nextDep')} ${esc(hm(est.dep))} ${esc(T('depAt'))}${est.arrive ? ' · '+T('estArrive')+' '+esc(hm(est.arrive)) : ''}${tag || ''}`;
+    const hint = `${T('kbEstimate')}：${note.replace(/<[^>]*>/g,'')}`;
+    e.innerHTML = `<button class="eta-q" type="button" title="${esc(hint)}" aria-label="${esc(hint)}" aria-expanded="false">？</button><span class="eta-q-note" hidden>${note}</span>`;
+    const btn = e.querySelector('.eta-q');
+    const noteEl = e.querySelector('.eta-q-note');
+    btn.addEventListener('click', ev => {
+      ev.stopPropagation();
+      const open = noteEl.hidden;
+      noteEl.hidden = !open;
+      btn.classList.toggle('on', open);
+      btn.setAttribute('aria-expanded', String(open));
+    });
     node.appendChild(e);
   }
 }
