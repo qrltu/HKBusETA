@@ -253,6 +253,9 @@ h3 { font-size: 14px; color: var(--muted); font-weight: 700; margin: 18px 0 6px;
 .trip-extra .extra-line .badge { height: 27px; min-width: 44px; font-size: 13px; }
 .trip-extra .extra-line .row-dest { font-size: 13.5px; }
 .rt-eta { font-size: 11.5px; color: var(--orange); font-weight: 700; margin-top: 3px; line-height: 1.4; }
+/* 收藏线路的班表推算提示换行到站名下方，避免横向挤压站名导致被截断 */
+.rt-result:has(.rt-eta) { flex-wrap: wrap; }
+.rt-result .rt-eta { box-sizing: border-box; flex: 0 0 100%; width: 100%; padding-left: 50px; margin-top: 1px; padding-bottom: 2px; }
 .nearby-bar { flex-wrap: wrap; }
 .nearby-manual { display: flex; width: 100%; gap: 8px; }
 .nearby-manual input { flex: 1; min-width: 0; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--card); color: var(--ink); font-size: 15px; outline: none; }
