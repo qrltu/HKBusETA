@@ -11,21 +11,12 @@
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="icon" href="icons/icon-192.png">
 <title>巴士到站 · Bus ETA</title>
-<!-- 首屏内联骨架：在外部 CSS/JS 加载前即渲染，消除启动空白/闪屏 -->
+<!-- 首屏底色：仅设置背景色，在外部 CSS 加载前避免深色/白色闪屏；布局完全交给 style.css -->
 <style>
-  html,body{margin:0;padding:0;background:#f5f6fa;color:#1b1d22;
-    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif}
-  html[data-theme="dark"],html[data-theme="dark"] body{background:#111318;color:#e8eaee}
-  #app{max-width:520px;margin:0 auto;min-height:100dvh;display:flex;flex-direction:column}
-  #topbar{display:flex;justify-content:space-between;align-items:center;gap:10px;
-    padding:calc(env(safe-area-inset-top,0px) + 14px) 14px 9px;height:78px;box-sizing:border-box}
-  .station-title{font-size:22px;font-weight:800;line-height:1.2}
-  .loc-line{font-size:13px;color:#8a8f99}
-  #tabbar{position:fixed;left:0;right:0;bottom:0;max-width:520px;margin:0 auto;height:62px;
-    display:flex;background:transparent}
-  #tabbar .tab{flex:1;border:0;background:none;font-size:11px}
+  html,body{background:#f5f6fa}
+  html[data-theme="dark"],html[data-theme="dark"] body{background:#111318}
 </style>
-<link rel="stylesheet" href="style.css?v=147">
+<link rel="stylesheet" href="style.css?v=148">
 </head>
 <body>
 <div id="app">
@@ -161,6 +152,6 @@
 
   <div id="toast" hidden></div>
 </div>
-<script src="app.js?v=147" defer></script>
+<script src="app.js?v=148" defer></script>
 </body>
 </html>
