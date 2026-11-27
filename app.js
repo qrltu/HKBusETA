@@ -2,7 +2,7 @@
 /* 27A / 806A / 806B 为内置静态时刻表（首末班时间 + 停靠站点），无实时查询 */
 'use strict';
 
-const VERSION = '1.5.7';
+const VERSION = '1.5.8';
 const BUILD = '2026-11-25';
 const DEFAULT_LOC = [22.4297, 114.203329];   // 雲滙：定位未更新时的默认坐标
 const NEARBY_R = 1000;                       // 附近站点半径（米）
@@ -2322,12 +2322,14 @@ if ('serviceWorker' in navigator){
 (async function init(){
   applyTheme();
   applyLang();
-  await loadStopCodes();
+  // 首屏优先：只等极小的 quickstops.json（常用站点），立即渲染到站板
   try { await loadQuick(); } catch(e){ toast(T('fail')); }
   renderChips();
-  switchView('stop');
+  switchView('stop');   // 首屏内容即刻出现，不等 166KB 的站码表
   startTimer();
   syncTopbar();
   refreshWeather(false);
+  // 站码表仅用于站名后缀显示，后台加载，不阻塞首屏（下次自动刷新自然带上）
+  loadStopCodes().catch(()=>{});
   // 附近定位不自动更新：默认云汇坐标，只有用户点「定位」或手工输入时才改变
 })();

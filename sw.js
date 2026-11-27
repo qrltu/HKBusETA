@@ -1,8 +1,8 @@
 /* 巴士到站 PWA Service Worker —— 离线优先 */
-const SHELL = 'bus-shell-v19';
-const DATA = 'bus-data-v4';
+const SHELL = 'bus-shell-v20';
+const DATA = 'bus-data-v5';
 const SHELL_FILES = [
-  './', './index.html', './style.css?v=146', './app.js?v=146', './manifest.webmanifest', './data/stopcodes.json',
+  './', './index.html', './style.css?v=147', './app.js?v=147', './manifest.webmanifest', './data/stopcodes.json',
   './icons/icon-192.png', './icons/icon-512.png', './icons/icon-180.png'
 ];
 const DATA_FILES = [
@@ -53,14 +53,18 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // 页面导航：网络优先，失败回退缓存
+  // 页面导航：缓存优先（启动即刻出首屏），后台更新，下次打开生效
   if (req.mode === 'navigate') {
     e.respondWith((async () => {
-      try { return await fetch(req); }
-      catch (err) {
-        const c = await caches.open(SHELL);
-        return (await c.match('./index.html')) || (await c.match('./')) || new Response('offline', {status:503});
-      }
+      const c = await caches.open(SHELL);
+      const cached = (await c.match('./index.html')) || (await c.match('./'));
+      const net = fetch(req).then(res => {
+        if (res.ok) c.put('./index.html', res.clone());
+        return res;
+      }).catch(() => null);
+      if (cached) return cached;
+      const res = await net;
+      return res || new Response('offline', {status:503});
     })());
     return;
   }
